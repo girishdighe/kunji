@@ -137,3 +137,22 @@ test('deriveEntrySeed changes when any field changes', async () => {
     assert.notEqual(bytesToHex(await deriveEntrySeed(mk, mut)), baseSeed);
   }
 });
+
+import { generateChars } from '../src/derive.js';
+
+test('generateChars: correct length, all chars from the charset, deterministic', async () => {
+  const seed = hexToBytes('33'.repeat(64));
+  const out1 = await generateChars(seed, CHARSETS.standard, 20);
+  const out2 = await generateChars(seed, CHARSETS.standard, 20);
+  assert.equal(out1.length, 20);
+  assert.equal(out1.join(''), out2.join(''));
+  for (const ch of out1) assert.ok(CHARSETS.standard.includes(ch), `char ${ch} not in charset`);
+});
+
+test('generateChars: length 64 works and does not repeat blockwise', async () => {
+  const seed = hexToBytes('44'.repeat(64));
+  const out = await generateChars(seed, CHARSETS['letters-digits'], 64);
+  assert.equal(out.length, 64);
+  // First 32 chars should not equal the next 32 (would indicate a repeating hash bug).
+  assert.notEqual(out.slice(0, 32).join(''), out.slice(32).join(''));
+});

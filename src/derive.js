@@ -76,3 +76,13 @@ export async function deriveEntrySeed(masterKey, { site, account, counter, rules
   const info = utf8(`gen|${site}|${account}|${counter}|${rules}|${length}`);
   return hkdfSha256(masterKey, utf8('kunji/v1'), info, 64);
 }
+
+export async function generateChars(entrySeed, charset, length) {
+  const keystream = makeKeystream(entrySeed, 'gen');
+  const n = charset.length;
+  const out = new Array(length);
+  for (let i = 0; i < length; i++) {
+    out[i] = charset[await sampleIndex(keystream, n)];
+  }
+  return out;
+}
