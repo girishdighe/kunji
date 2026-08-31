@@ -98,3 +98,42 @@ test('sampleIndex maps within [0, n)', async () => {
   const fake = { next: async () => 0 };
   assert.equal(await sampleIndex(fake, 62), 0);
 });
+
+import { deriveEntrySeed } from '../src/derive.js';
+
+test('deriveEntrySeed returns 64 bytes and is deterministic', async () => {
+  const masterKey = hexToBytes('22'.repeat(32));
+  const params = { site: 'github.com', account: 'alex', counter: 1, rules: 'standard', length: 20 };
+  const a = await deriveEntrySeed(masterKey, params);
+  const b = await deriveEntrySeed(masterKey, params);
+  assert.equal(a.length, 64);
+  assert.equal(bytesToHex(a), bytesToHex(b));
+});
+
+test('deriveEntrySeed uses the exact info string "gen|site|account|counter|rules|length"', async () => {
+  const masterKey = hexToBytes('22'.repeat(32));
+  const fromApi = await deriveEntrySeed(masterKey, {
+    site: 'github.com', account: 'alex', counter: 3, rules: 'standard', length: 24,
+  });
+  const { hkdfSha256 } = await import('../src/webcrypto.js');
+  const { utf8 } = await import('../src/encoding.js');
+  const manual = await hkdfSha256(
+    masterKey, utf8('kunji/v1'), utf8('gen|github.com|alex|3|standard|24'), 64,
+  );
+  assert.equal(bytesToHex(fromApi), bytesToHex(manual));
+});
+
+test('deriveEntrySeed changes when any field changes', async () => {
+  const mk = hexToBytes('22'.repeat(32));
+  const base = { site: 'a', account: 'b', counter: 1, rules: 'standard', length: 20 };
+  const baseSeed = bytesToHex(await deriveEntrySeed(mk, base));
+  for (const mut of [
+    { ...base, site: 'a2' },
+    { ...base, account: 'b2' },
+    { ...base, counter: 2 },
+    { ...base, rules: 'letters-digits' },
+    { ...base, length: 21 },
+  ]) {
+    assert.notEqual(bytesToHex(await deriveEntrySeed(mk, mut)), baseSeed);
+  }
+});

@@ -71,3 +71,8 @@ export async function sampleIndex(keystream, n) {
     if (b < limit) return b % n;
   }
 }
+
+export async function deriveEntrySeed(masterKey, { site, account, counter, rules, length }) {
+  const info = utf8(`gen|${site}|${account}|${counter}|${rules}|${length}`);
+  return hkdfSha256(masterKey, utf8('kunji/v1'), info, 64);
+}
