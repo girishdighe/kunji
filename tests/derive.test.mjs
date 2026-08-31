@@ -208,3 +208,58 @@ test('enforceClasses for letters-digits does not require a symbol', async () => 
   const out = await enforceClasses(chars, seed, 'letters-digits', CHARSETS['letters-digits']);
   assert.equal(out.join(''), chars.join(''));
 });
+
+import { deriveMasterKey, computeKcv, derivePassword } from '../src/derive.js';
+
+const FIXED_MK = hexToBytes('abababababababababababababababababababababababababababababababab12');
+
+test('deriveMasterKey is PBKDF2-SHA512 over passphrase with normalised identity as salt', async () => {
+  const mk = await deriveMasterKey('correct horse battery staple', '  ALEX@example.com ', 1000);
+  const { pbkdf2Sha512 } = await import('../src/webcrypto.js');
+  const { utf8 } = await import('../src/encoding.js');
+  const expected = await pbkdf2Sha512(
+    utf8('correct horse battery staple'), utf8('alex@example.com'), 1000, 32,
+  );
+  assert.equal(bytesToHex(mk), bytesToHex(expected));
+});
+
+test('computeKcv returns a 4-byte base64 string, deterministic, key-sensitive', async () => {
+  const a = await computeKcv(FIXED_MK);
+  const b = await computeKcv(FIXED_MK);
+  assert.equal(a, b);
+  assert.match(a, /^[A-Za-z0-9+/]{5,8}={0,2}$/);
+  const other = await computeKcv(hexToBytes('cd'.repeat(32)));
+  assert.notEqual(a, other);
+});
+
+test('derivePassword with a fixed masterKey: deterministic, right length, all classes', async () => {
+  const params = {
+    masterKey: FIXED_MK, site: 'github.com', account: 'alex',
+    counter: 1, rules: 'standard', length: 20,
+  };
+  const p1 = await derivePassword(params);
+  const p2 = await derivePassword(params);
+  assert.equal(p1, p2);
+  assert.equal(p1.length, 20);
+  const present = classesPresent(p1);
+  for (const c of ['lower', 'upper', 'digit', 'symbol']) assert.ok(present.has(c));
+  for (const ch of p1) assert.ok(CHARSETS.standard.includes(ch));
+});
+
+test('derivePassword: counter bump changes the password', async () => {
+  const base = { masterKey: FIXED_MK, site: 'x', account: 'y', counter: 1, rules: 'standard', length: 16 };
+  assert.notEqual(await derivePassword(base), await derivePassword({ ...base, counter: 2 }));
+});
+
+test('derivePassword: validates length and counter', async () => {
+  await assert.rejects(() => derivePassword({ masterKey: FIXED_MK, site: 'x', account: 'y', length: 7 }));
+  await assert.rejects(() => derivePassword({ masterKey: FIXED_MK, site: 'x', account: 'y', length: 65 }));
+  await assert.rejects(() => derivePassword({ masterKey: FIXED_MK, site: 'x', account: 'y', counter: 0 }));
+  await assert.rejects(() => derivePassword({ masterKey: FIXED_MK, site: 'x', account: 'y', rules: 'nope' }));
+});
+
+test('derivePassword: normalises site and account before deriving', async () => {
+  const a = await derivePassword({ masterKey: FIXED_MK, site: 'GitHub.com', account: 'Alex', length: 16 });
+  const b = await derivePassword({ masterKey: FIXED_MK, site: 'github.com', account: 'alex', length: 16 });
+  assert.equal(a, b);
+});

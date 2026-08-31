@@ -115,3 +115,44 @@ export async function enforceClasses(chars, entrySeed, rules, charset) {
   }
   return result;
 }
+
+export async function deriveMasterKey(passphrase, identity, iterations = PBKDF2_ITERATIONS) {
+  return pbkdf2Sha512(
+    utf8(passphrase), utf8(normaliseInput(identity)), iterations, MASTER_KEY_BYTES,
+  );
+}
+
+export async function computeKcv(masterKey) {
+  const mac = await hmacSha256(masterKey, utf8('kunji/kcv/v1'));
+  return bytesToBase64(mac.slice(0, 4));
+}
+
+export async function derivePassword(params) {
+  const site = normaliseInput(params.site ?? '');
+  const account = normaliseInput(params.account ?? '');
+  const counter = params.counter ?? 1;
+  const rules = params.rules ?? DEFAULT_RULES;
+  const length = params.length ?? DEFAULT_LENGTH;
+
+  if (!Number.isInteger(counter) || counter < 1) {
+    throw new Error('counter must be an integer >= 1');
+  }
+  if (!Number.isInteger(length) || length < MIN_LENGTH || length > MAX_LENGTH) {
+    throw new Error(`length must be an integer in ${MIN_LENGTH}..${MAX_LENGTH}`);
+  }
+  const charset = CHARSETS[rules];
+  if (!charset) throw new Error(`unknown rules: ${rules}`);
+
+  const masterKey = params.masterKey
+    ? params.masterKey
+    : await deriveMasterKey(
+        params.passphrase,
+        normaliseInput(params.identity ?? ''),
+        params.iterations ?? PBKDF2_ITERATIONS,
+      );
+
+  const entrySeed = await deriveEntrySeed(masterKey, { site, account, counter, rules, length });
+  const raw = await generateChars(entrySeed, charset, length);
+  const fixed = await enforceClasses(raw, entrySeed, rules, charset);
+  return fixed.join('');
+}
