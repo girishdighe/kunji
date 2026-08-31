@@ -86,3 +86,32 @@ export async function generateChars(entrySeed, charset, length) {
   }
   return out;
 }
+
+function _classOf(ch) {
+  if (/[a-z]/.test(ch)) return 'lower';
+  if (/[A-Z]/.test(ch)) return 'upper';
+  if (/[0-9]/.test(ch)) return 'digit';
+  return 'symbol';
+}
+
+export async function enforceClasses(chars, entrySeed, rules, charset) {
+  const result = chars.slice();
+  const length = result.length;
+  const need = requiredClasses(rules);
+
+  const present = new Set();
+  for (const ch of result) present.add(_classOf(ch));
+  const missing = need.filter((c) => !present.has(c));
+  if (missing.length === 0) return result;
+
+  const keystream = makeKeystream(entrySeed, 'fix');
+  const used = new Set();
+  for (const cls of missing) {
+    let pos = await sampleIndex(keystream, length);
+    while (used.has(pos)) pos = (pos + 1) % length;
+    used.add(pos);
+    const pool = classChars(cls, charset);
+    result[pos] = pool[await sampleIndex(keystream, pool.length)];
+  }
+  return result;
+}

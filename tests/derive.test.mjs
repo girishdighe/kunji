@@ -156,3 +156,55 @@ test('generateChars: length 64 works and does not repeat blockwise', async () =>
   // First 32 chars should not equal the next 32 (would indicate a repeating hash bug).
   assert.notEqual(out.slice(0, 32).join(''), out.slice(32).join(''));
 });
+
+import { enforceClasses } from '../src/derive.js';
+
+function classesPresent(str) {
+  const set = new Set();
+  for (const ch of str) {
+    if (/[a-z]/.test(ch)) set.add('lower');
+    else if (/[A-Z]/.test(ch)) set.add('upper');
+    else if (/[0-9]/.test(ch)) set.add('digit');
+    else set.add('symbol');
+  }
+  return set;
+}
+
+test('enforceClasses is a no-op when all required classes already present', async () => {
+  const seed = hexToBytes('55'.repeat(64));
+  const chars = 'aB3!aB3!aB3!aB3!aB3!'.split('');
+  const out = await enforceClasses(chars, seed, 'standard', CHARSETS.standard);
+  assert.equal(out.join(''), chars.join(''));
+});
+
+test('enforceClasses injects every missing required class', async () => {
+  const seed = hexToBytes('66'.repeat(64));
+  const chars = 'aaaaaaaaaaaaaaaaaaaa'.split(''); // only lowercase
+  const out = await enforceClasses(chars, seed, 'standard', CHARSETS.standard);
+  const present = classesPresent(out.join(''));
+  for (const c of ['lower', 'upper', 'digit', 'symbol']) assert.ok(present.has(c), `missing ${c}`);
+});
+
+test('enforceClasses changes at most (number of missing classes) positions', async () => {
+  const seed = hexToBytes('77'.repeat(64));
+  const chars = 'aaaaaaaaaaaaaaaaaaaa'.split('');
+  const out = await enforceClasses(chars, seed, 'standard', CHARSETS.standard);
+  let changed = 0;
+  for (let i = 0; i < chars.length; i++) if (chars[i] !== out[i]) changed += 1;
+  assert.ok(changed <= 3, `changed ${changed} positions, expected <= 3 (upper, digit, symbol)`);
+});
+
+test('enforceClasses is deterministic', async () => {
+  const seed = hexToBytes('88'.repeat(64));
+  const chars = 'aaaaaaaaaaaaaaaaaaaa'.split('');
+  const a = await enforceClasses(chars, seed, 'standard', CHARSETS.standard);
+  const b = await enforceClasses(chars, seed, 'standard', CHARSETS.standard);
+  assert.equal(a.join(''), b.join(''));
+});
+
+test('enforceClasses for letters-digits does not require a symbol', async () => {
+  const seed = hexToBytes('99'.repeat(64));
+  const chars = 'aA1aA1aA1aA1aA1aA1aA'.split('');
+  const out = await enforceClasses(chars, seed, 'letters-digits', CHARSETS['letters-digits']);
+  assert.equal(out.join(''), chars.join(''));
+});
