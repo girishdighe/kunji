@@ -547,9 +547,9 @@ test('charsets are the exact frozen strings', () => {
 });
 
 test('charset lengths', () => {
-  assert.equal(CHARSETS.standard.length, 72);
+  assert.equal(CHARSETS.standard.length, 74);
   assert.equal(CHARSETS['letters-digits'].length, 62);
-  assert.equal(CHARSETS['max-symbols'].length, 83);
+  assert.equal(CHARSETS['max-symbols'].length, 84);
 });
 
 test('defaults', () => {
@@ -640,7 +640,7 @@ export function classChars(cls, charset) {
 - [ ] **Step 4: Run to verify it passes**
 
 Run: `node --test tests/derive.test.mjs`
-Expected: PASS, 8 tests. If the length assertions fail, do not change the test to match; the charset strings above are the frozen spec values, so a mismatch means a typo in the string literal.
+Expected: PASS, 7 tests. The charset strings are the frozen spec values (spec s4.3) and must stay byte-identical; the `charset lengths` assertions (74 / 62 / 84) are the true lengths of those frozen strings. If a length assertion fails, fix the string literal typo, never the frozen string's content.
 
 - [ ] **Step 5: Commit**
 
@@ -1640,7 +1640,7 @@ function initUI() {
       output.classList.remove('empty');
       output.textContent = output.dataset.masked;
       resultLabel.textContent = 'Password for ' + site.value.trim().toLowerCase();
-      const size = ({ 'standard': 72, 'letters-digits': 62, 'max-symbols': 83 })[rules];
+      const size = ({ 'standard': 74, 'letters-digits': 62, 'max-symbols': 84 })[rules];
       entropyEl.textContent = estimateEntropyBits(length, size) + ' bits of entropy. Unique to this site and counter 1.';
       master.value = '';
       master.type = 'password';
