@@ -1,0 +1,11 @@
+{
+  "name": "kunji",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "build": "node tools/build.mjs",
+    "check": "node tools/check-invariants.mjs"
+  }
+}
