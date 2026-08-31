@@ -8,4 +8,68 @@
 <style>/*STYLE*/</style>
 </head>
 <body>
-<main class="card"><p>stub</p></main>
+<main class="card">
+  <header>
+    <div class="title">Kunji</div>
+    <div class="subtitle">Offline. Nothing is stored or sent.</div>
+  </header>
+
+  <div class="fields">
+    <div>
+      <div class="field">
+        <input id="identity" type="text" autocomplete="off" spellcheck="false" placeholder=" ">
+        <label for="identity">Identity</label>
+      </div>
+    </div>
+
+    <div>
+      <div class="field">
+        <input id="master" type="password" autocomplete="off" spellcheck="false" placeholder=" ">
+        <label for="master">Master passphrase</label>
+        <button class="reveal" type="button" id="toggleMaster">Show</button>
+      </div>
+      <div class="kcv" id="kcv" data-state="none"><span class="dot"></span> <span id="kcvText">enter identity and passphrase</span></div>
+    </div>
+
+    <div class="field">
+      <input id="site" type="text" autocomplete="off" spellcheck="false" placeholder=" ">
+      <label for="site">Site or app</label>
+    </div>
+
+    <div class="field">
+      <input id="account" type="text" autocomplete="off" spellcheck="false" placeholder=" ">
+      <label for="account">Account</label>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <input id="length" type="text" inputmode="numeric" value="20" placeholder=" ">
+        <label for="length">Length</label>
+      </div>
+      <div class="field select-wrap">
+        <select id="rules">
+          <option value="standard">Standard</option>
+          <option value="letters-digits">Letters and digits</option>
+          <option value="max-symbols">Maximum symbols</option>
+        </select>
+        <label for="rules">Rules</label>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="result">
+    <div class="result-head">
+      <span class="label" id="resultLabel">Password</span>
+      <button class="copy-btn" type="button" id="copyBtn">Copy</button>
+    </div>
+    <div class="result-value empty" id="output">not generated</div>
+    <div class="entropy" id="entropy"></div>
+    <div class="error" id="error"></div>
+  </div>
+
+  <button class="btn-primary" type="button" id="generateBtn">Generate</button>
+
+  <div class="foot">Clipboard clears after 25 seconds. Passphrase is cleared after you generate.</div>
+</main>
