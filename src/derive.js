@@ -44,3 +44,30 @@ export function classChars(cls, charset) {
   }
   return out;
 }
+
+export function makeKeystream(entrySeed, label) {
+  const labelBytes = utf8(label);
+  let block = new Uint8Array(0);
+  let blockIndex = 0;
+  let pos = 0;
+  return {
+    async next() {
+      if (pos >= block.length) {
+        block = await hmacSha256(entrySeed, concatBytes(labelBytes, uint32be(blockIndex)));
+        blockIndex += 1;
+        pos = 0;
+      }
+      const value = block[pos];
+      pos += 1;
+      return value;
+    },
+  };
+}
+
+export async function sampleIndex(keystream, n) {
+  const limit = 256 - (256 % n);
+  for (;;) {
+    const b = await keystream.next();
+    if (b < limit) return b % n;
+  }
+}
