@@ -57,7 +57,8 @@ header { margin-bottom: 28px; }
 }
 .field input:focus + label,
 .field input:not(:placeholder-shown) + label,
-.field.filled label { top: 7px; font-size: 12px; }
+.field.filled label,
+.select-wrap label { top: 7px; font-size: 12px; }
 .field input:focus + label { color: var(--blue); }
 .reveal {
   position: absolute;
