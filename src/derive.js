@@ -65,6 +65,9 @@ export function makeKeystream(entrySeed, label) {
 }
 
 export async function sampleIndex(keystream, n) {
+  if (!Number.isInteger(n) || n < 1) {
+    throw new Error('sampleIndex: n must be a positive integer');
+  }
   const limit = 256 - (256 % n);
   for (;;) {
     const b = await keystream.next();
@@ -107,8 +110,19 @@ export async function enforceClasses(chars, entrySeed, rules, charset) {
   const keystream = makeKeystream(entrySeed, 'fix');
   const used = new Set();
   for (const cls of missing) {
+    // Protect the sole carrier of any already-present required class.
+    const counts = {};
+    for (const c of need) counts[c] = 0;
+    for (const ch of result) {
+      if (_classOf(ch) in counts) counts[_classOf(ch)] += 1;
+    }
+    const protectedPos = new Set();
+    for (let i = 0; i < length; i++) {
+      if (counts[_classOf(result[i])] === 1) protectedPos.add(i);
+    }
+
     let pos = await sampleIndex(keystream, length);
-    while (used.has(pos)) pos = (pos + 1) % length;
+    while (used.has(pos) || protectedPos.has(pos)) pos = (pos + 1) % length;
     used.add(pos);
     const pool = classChars(cls, charset);
     result[pos] = pool[await sampleIndex(keystream, pool.length)];

@@ -7,12 +7,6 @@ export function groupInFours(str) {
   return str.replace(/(.{4})/g, '$1 ').trim();
 }
 
-async function _revealFor(el, seconds, timerBox) {
-  el.dataset.revealed = '1';
-  if (timerBox.t) clearTimeout(timerBox.t);
-  timerBox.t = setTimeout(() => { el.dataset.revealed = '0'; el.textContent = el.dataset.masked || ''; }, seconds * 1000);
-}
-
 function initUI() {
   const $ = (id) => document.getElementById(id);
   const identity = $('identity');
@@ -36,6 +30,7 @@ function initUI() {
   const revealTimer = {};
   let clipboardTimer = null;
   let plaintext = '';
+  let plainGrouped = '';
 
   toggleMaster.addEventListener('click', () => {
     const showing = master.type === 'text';
@@ -84,7 +79,7 @@ function initUI() {
       });
       const masked = '\u2022'.repeat(plaintext.length);
       output.dataset.masked = groupInFours(masked);
-      output.dataset.plain = groupInFours(plaintext);
+      plainGrouped = groupInFours(plaintext);
       output.dataset.revealed = '0';
       output.classList.remove('empty');
       output.textContent = output.dataset.masked;
@@ -106,13 +101,13 @@ function initUI() {
   generateBtn.addEventListener('click', generate);
 
   output.addEventListener('click', () => {
-    if (output.classList.contains('empty') || !output.dataset.plain) return;
+    if (output.classList.contains('empty') || !plainGrouped) return;
     if (output.dataset.revealed === '1') {
       output.dataset.revealed = '0';
       output.textContent = output.dataset.masked;
     } else {
       output.dataset.revealed = '1';
-      output.textContent = output.dataset.plain;
+      output.textContent = plainGrouped;
       if (revealTimer.t) clearTimeout(revealTimer.t);
       revealTimer.t = setTimeout(() => {
         output.dataset.revealed = '0';

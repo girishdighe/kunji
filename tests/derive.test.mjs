@@ -263,3 +263,25 @@ test('derivePassword: normalises site and account before deriving', async () => 
   const b = await derivePassword({ masterKey: FIXED_MK, site: 'github.com', account: 'alex', length: 16 });
   assert.equal(a, b);
 });
+
+test('derivePassword always contains every required class (B1 regression)', async () => {
+  const rulesCases = [
+    { rules: 'standard', classes: ['lower', 'upper', 'digit', 'symbol'] },
+    { rules: 'max-symbols', classes: ['lower', 'upper', 'digit', 'symbol'] },
+    { rules: 'letters-digits', classes: ['lower', 'upper', 'digit'] },
+  ];
+  for (const { rules, classes } of rulesCases) {
+    for (const length of [MIN_LENGTH, 9, 12, 20]) {
+      for (let counter = 1; counter <= 60; counter++) {
+        const pw = await derivePassword({
+          masterKey: FIXED_MK, site: 's', account: 'a', counter, rules, length,
+        });
+        assert.equal(pw.length, length);
+        const present = classesPresent(pw);
+        for (const c of classes) {
+          assert.ok(present.has(c), `${rules}/${length} #${counter} missing ${c}: ${pw}`);
+        }
+      }
+    }
+  }
+});

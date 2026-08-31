@@ -148,18 +148,28 @@ For each of the `length` positions: read the next keystream byte `b`; if
 
 **Step 5: guarantee required classes.**
 Derive a second stream `fix(i) = HMAC-SHA256(entrySeed, utf8("fix") || uint32be(i))`.
-For each required class not present in the Step 4 output, in the class order
-listed in 4.3:
+Maintain `used`, the set of positions this step has already written (initially
+empty). For each required class not present in the current working string, in the
+class order listed in 4.3:
 
-1. Read one `fix` byte, map by rejection sampling into `[0, length)` to pick a
-   target position. If that position was already overwritten by a previous fix
-   step, advance `(pos + 1) mod length` until a free position is found.
-2. Read `fix` bytes, rejection-sample into that class's character list, write the
-   chosen character at the target position.
+1. Compute `protected`: the set of positions `p` whose character belongs to a
+   required class that occurs **exactly once** in the current working string.
+   These are the sole carriers of an already-satisfied class and must not be
+   overwritten.
+2. Read one `fix` byte, map by rejection sampling into `[0, length)` to pick a
+   target position. While that position is in `used ∪ protected`, advance
+   `(pos + 1) mod length` until a position outside that set is found. (With
+   `length >= 8` and at most four required classes, `used` has at most three
+   members and `protected` at most three, so a free position always exists and
+   the scan terminates.)
+3. Read `fix` bytes, rejection-sample into that class's character list, write the
+   chosen character at the target position, and add the position to `used`.
 
 Per-class character lists: lowercase `a-z`, uppercase `A-Z`, digit `0-9`, symbol
 = the symbol characters present in the active `rules` charset. This changes at
-most 4 of `length` positions and is fully deterministic.
+most 4 of `length` positions, never removes an already-present required class,
+and is fully deterministic. The Step 6 output therefore always contains every
+required class.
 
 **Step 6: output** the resulting `length`-character string.
 
