@@ -1,0 +1,90 @@
+{
+  "profile": "v1",
+  "iterations": 1000,
+  "cases": [
+    {
+      "input": {
+        "identity": "alex@example.com",
+        "passphrase": "correct horse battery staple",
+        "site": "github.com",
+        "account": "alex",
+        "counter": 1,
+        "rules": "standard",
+        "length": 20
+      },
+      "masterKeyHex": "e1cb684a86c4099cd5de7a32e4bd6cb4f2a73ff547a00d2d599b91ad6f59ccec",
+      "kcv": "Drie1Q==",
+      "password": "Bvi*47lLCE_mKS=8zNLN"
+    },
+    {
+      "input": {
+        "identity": "alex@example.com",
+        "passphrase": "correct horse battery staple",
+        "site": "github.com",
+        "account": "alex",
+        "counter": 2,
+        "rules": "standard",
+        "length": 20
+      },
+      "masterKeyHex": "e1cb684a86c4099cd5de7a32e4bd6cb4f2a73ff547a00d2d599b91ad6f59ccec",
+      "kcv": "Drie1Q==",
+      "password": "DY0P*ju213Uzys8xaFNb"
+    },
+    {
+      "input": {
+        "identity": "family",
+        "passphrase": "a long enough passphrase here",
+        "site": "google.com",
+        "account": "family@example.com",
+        "counter": 1,
+        "rules": "max-symbols",
+        "length": 32
+      },
+      "masterKeyHex": "c335433f7c7a78c62672cefda2449794c1be90501774810f35577017e7f10329",
+      "kcv": "RxOyCg==",
+      "password": "8_6imM!H3s];vUcgFz3rFOWhJ3QZpBgY"
+    },
+    {
+      "input": {
+        "identity": "family",
+        "passphrase": "a long enough passphrase here",
+        "site": "router.local",
+        "account": "admin",
+        "counter": 1,
+        "rules": "letters-digits",
+        "length": 12
+      },
+      "masterKeyHex": "c335433f7c7a78c62672cefda2449794c1be90501774810f35577017e7f10329",
+      "kcv": "RxOyCg==",
+      "password": "uHXjje0SFBxQ"
+    },
+    {
+      "input": {
+        "identity": "x",
+        "passphrase": "y",
+        "site": "s",
+        "account": "a",
+        "counter": 1,
+        "rules": "standard",
+        "length": 8
+      },
+      "masterKeyHex": "802badd40ed6c195a3d4b501ea708c1c704422f5546ccba0705f2f2ed159d071",
+      "kcv": "EjbXXw==",
+      "password": "i?yE0isQ"
+    },
+    {
+      "input": {
+        "identity": "x",
+        "passphrase": "y",
+        "site": "s",
+        "account": "a",
+        "counter": 1,
+        "rules": "standard",
+        "length": 64
+      },
+      "masterKeyHex": "802badd40ed6c195a3d4b501ea708c1c704422f5546ccba0705f2f2ed159d071",
+      "kcv": "EjbXXw==",
+      "password": "4dm?&-6n*9MaK8oIJAh-z3exH6E*T8eUgMzohQ7vfK!MUTiJ3War&w3jQWTDf+V="
+    }
+  ]
+}
