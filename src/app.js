@@ -31,6 +31,11 @@ function initUI() {
   let clipboardTimer = null;
   let plaintext = '';
   let plainGrouped = '';
+  // Cache the derived master key so a Generate right after the KCV check does not
+  // repeat the ~600k-iteration PBKDF2. Bound to the exact identity+passphrase that
+  // produced it, and wiped whenever the passphrase is cleared.
+  let mkCache = { id: null, pw: null, key: null };
+  const clearMkCache = () => { mkCache = { id: null, pw: null, key: null }; };
 
   toggleMaster.addEventListener('click', () => {
     const showing = master.type === 'text';
@@ -41,12 +46,14 @@ function initUI() {
   async function refreshKcv() {
     const id = identity.value.trim();
     const pw = master.value;
+    clearMkCache();
     if (!id || !pw) { kcv.dataset.state = 'none'; kcvText.textContent = 'enter identity and passphrase'; return; }
     kcv.dataset.state = 'none';
     kcvText.textContent = 'checking...';
     try {
       const mk = await deriveMasterKey(pw, id);
       const value = await computeKcv(mk);
+      mkCache = { id: identity.value, pw: master.value, key: mk };
       kcv.dataset.state = 'ok';
       kcvText.textContent = 'key verified (' + value + ')';
     } catch (e) {
@@ -68,15 +75,14 @@ function initUI() {
     generateBtn.disabled = true;
     generateBtn.textContent = 'Generating...';
     try {
-      plaintext = await derivePassword({
-        identity: identity.value,
-        passphrase: master.value,
-        site: site.value,
-        account: account.value,
-        counter: 1,
-        rules,
-        length,
-      });
+      const params = { site: site.value, account: account.value, counter: 1, rules, length };
+      if (mkCache.key && mkCache.id === identity.value && mkCache.pw === master.value) {
+        params.masterKey = mkCache.key;
+      } else {
+        params.identity = identity.value;
+        params.passphrase = master.value;
+      }
+      plaintext = await derivePassword(params);
       const masked = '\u2022'.repeat(plaintext.length);
       output.dataset.masked = groupInFours(masked);
       plainGrouped = groupInFours(plaintext);
@@ -86,14 +92,17 @@ function initUI() {
       resultLabel.textContent = 'Password for ' + site.value.trim().toLowerCase();
       const size = ({ 'standard': 74, 'letters-digits': 62, 'max-symbols': 84 })[rules];
       entropyEl.textContent = estimateEntropyBits(length, size) + ' bits of entropy. Unique to this site and counter 1.';
-      master.value = '';
-      master.type = 'password';
-      toggleMaster.textContent = 'Show';
-      kcv.dataset.state = 'none';
-      kcvText.textContent = 'passphrase cleared';
     } catch (e) {
       errorEl.textContent = e.message;
     } finally {
+      // Hygiene runs whether or not derivation succeeded: never leave the
+      // passphrase or its derived key sitting in the page after a Generate.
+      master.value = '';
+      master.type = 'password';
+      toggleMaster.textContent = 'Show';
+      clearMkCache();
+      kcv.dataset.state = 'none';
+      kcvText.textContent = 'passphrase cleared';
       generateBtn.disabled = false;
       generateBtn.textContent = 'Generate';
     }

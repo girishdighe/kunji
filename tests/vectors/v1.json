@@ -86,5 +86,20 @@
       "kcv": "EjbXXw==",
       "password": "4dm?&-6n*9MaK8oIJAh-z3exH6E*T8eUgMzohQ7vfK!MUTiJ3War&w3jQWTDf+V="
     }
-  ]
+  ],
+  "highCost": {
+    "iterations": 600000,
+    "input": {
+      "identity": "alex@example.com",
+      "passphrase": "correct horse battery staple",
+      "site": "github.com",
+      "account": "alex",
+      "counter": 1,
+      "rules": "standard",
+      "length": 20
+    },
+    "masterKeyHex": "4abd34ff2a63c6541161023c3431d9fd3717df01d02566f2c5e92dcbfc7c93de",
+    "kcv": "O4nBrQ==",
+    "password": "=qunf!P2eiR%0J4AUnWO"
+  }
 }

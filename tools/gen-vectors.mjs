@@ -1,10 +1,12 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
-import { derivePassword, deriveMasterKey, computeKcv, PROFILE } from '../src/derive.js';
+import { derivePassword, deriveMasterKey, computeKcv, PROFILE, PBKDF2_ITERATIONS } from '../src/derive.js';
 import { bytesToHex } from '../src/encoding.js';
 
-// End-to-end cases use a small iteration count for speed. The shipping cost
-// (PBKDF2_ITERATIONS) is a separate open decision and does not affect the
-// pipeline shape that these vectors lock.
+// The `cases` array uses a small iteration count so the pipeline SHAPE (HKDF
+// salt/info, keystream labels, rejection sampling, class order, charsets, KCV)
+// can be re-verified in milliseconds. The single `highCost` case below locks the
+// actual shipping KDF cost, PBKDF2_ITERATIONS (spec s4.4 step 1). Changing that
+// constant makes `vectors.test.mjs` fail until this file is re-run.
 const ITER = 1000;
 
 const cases = [
@@ -31,6 +33,20 @@ for (const c of cases) {
   });
 }
 
+// One end-to-end case at the real shipping iteration count.
+const highInput = {
+  identity: 'alex@example.com', passphrase: 'correct horse battery staple',
+  site: 'github.com', account: 'alex', counter: 1, rules: 'standard', length: 20,
+};
+const highMk = await deriveMasterKey(highInput.passphrase, highInput.identity, PBKDF2_ITERATIONS);
+out.highCost = {
+  iterations: PBKDF2_ITERATIONS,
+  input: highInput,
+  masterKeyHex: bytesToHex(highMk),
+  kcv: await computeKcv(highMk),
+  password: await derivePassword({ ...highInput, masterKey: highMk }),
+};
+
 mkdirSync('tests/vectors', { recursive: true });
 writeFileSync('tests/vectors/v1.json', JSON.stringify(out, null, 2) + '\n');
-console.log(`wrote ${out.cases.length} vectors`);
+console.log(`wrote ${out.cases.length} vectors + 1 high-cost (${PBKDF2_ITERATIONS} iters)`);
