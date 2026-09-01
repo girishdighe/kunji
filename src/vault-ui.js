@@ -19,6 +19,8 @@ function initVaultTab() {
   let dirty = false;
   let view = 'list';             // list | detail | editor  (within UNLOCKED)
   let selectedId = null;
+  let listQuery = '';
+  let sessionMoveNoteShown = false;
 
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]
@@ -188,7 +190,114 @@ function initVaultTab() {
       }
     });
   }
-  function renderUnlocked() { panel.innerHTML = '<p class="v-explain">Unlocked (Task 11)</p>'; }
+  function markDirty() { dirty = true; if (state === 'UNLOCKED' && view === 'list') renderList(); }
+
+  function lock() {
+    // keep loadedEnvelope so re-unlock only needs the passphrase
+    wipe();
+    state = loadedEnvelope ? 'LOCKED' : 'NO_VAULT';
+    render();
+  }
+
+  async function saveVault() {
+    const prevRevision = loadedEnvelope ? (loadedEnvelope.revision || 0) : 0;
+    const text = await encodeEnvelope(vault, {
+      masterKey,
+      identityHint: currentIdentityForHint(),
+      prevRevision,
+      writerId,
+    });
+    loadedEnvelope = parseEnvelope(text); // adopt the new revision/updatedAt
+    dirty = false;
+    const blob = new Blob([text], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'kunji-data.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    if (!sessionMoveNoteShown) {
+      sessionMoveNoteShown = true;
+      alert('Saved as kunji-data.json in your downloads. Move it to wherever your sync watches, and overwrite the previous copy.');
+    }
+    renderList();
+  }
+
+  function currentIdentityForHint() {
+    if (!identityHintOn) return null;
+    return sessionIdentity
+      || (loadedEnvelope && typeof loadedEnvelope.identityHint === 'string' ? loadedEnvelope.identityHint : null);
+  }
+
+  function renderUnlocked() {
+    if (view === 'detail') return renderDetail();
+    if (view === 'editor') return renderEditor();
+    return renderList();
+  }
+
+  // Shared row markup so the full render and the search re-filter never drift.
+  function rowsHtml() {
+    const q = (listQuery || '').toLowerCase();
+    const html = vault.entries
+      .filter((e) => !q || `${e.name} ${e.site} ${e.account}`.toLowerCase().includes(q))
+      .map((e) => {
+        const meta = e.type === 'sso'
+          ? `${esc(e.site)} &middot; via ${esc(e.via && e.via.site)} <span class="v-chip">SSO</span>`
+          : `${esc(e.site)} &middot; ${esc(e.account)}`;
+        return `<div class="v-row" data-id="${e.id}"><div class="v-name">${esc(e.name) || '(no name)'}</div><div class="v-meta">${meta}</div></div>`;
+      })
+      .join('');
+    return html || `<div class="v-foot">${q ? 'No match.' : 'No entries yet.'}</div>`;
+  }
+
+  function bindRowClicks(container) {
+    container.querySelectorAll('.v-row').forEach((row) => row.addEventListener('click', () => {
+      selectedId = row.dataset.id; view = 'detail'; render();
+    }));
+  }
+
+  function renderList() {
+    panel.innerHTML = `
+      <div class="v-bar">
+        <span class="v-count">Vault &middot; ${vault.entries.length}</span>
+        <button class="link-btn" id="vNew" type="button">+ New</button>
+      </div>
+      <input class="v-search" id="vSearch" type="text" placeholder="Search…" value="${esc(listQuery || '')}">
+      <div id="vRows">${rowsHtml()}</div>
+      ${dirty ? '<div class="v-dirty">Unsaved changes<button class="link-btn" id="vSaveTop" type="button" style="color:#f5c518">Save vault</button></div>' : ''}
+      <div class="v-foot"><button class="link-btn" id="vSave" type="button">Save vault</button> &middot; <button class="link-btn" id="vLock" type="button">Lock</button></div>
+      <label class="v-foot" style="display:block"><input type="checkbox" id="vHint" ${identityHintOn ? 'checked' : ''}> Prefill identity on devices that open this file <span class="v-danger">(anyone with the file can read it)</span></label>
+      <div class="error" id="vListError"></div>
+    `;
+
+    const search = panel.querySelector('#vSearch');
+    search.addEventListener('input', () => {
+      listQuery = search.value;
+      const c = panel.querySelector('#vRows');
+      c.innerHTML = rowsHtml();
+      bindRowClicks(c);
+    });
+    bindRowClicks(panel.querySelector('#vRows'));
+    panel.querySelector('#vNew').addEventListener('click', () => { selectedId = null; view = 'editor'; render(); });
+    panel.querySelector('#vSave').addEventListener('click', () => saveVault().catch(showSaveError));
+    if (panel.querySelector('#vSaveTop')) panel.querySelector('#vSaveTop').addEventListener('click', () => saveVault().catch(showSaveError));
+    panel.querySelector('#vHint').addEventListener('change', (ev) => { identityHintOn = ev.target.checked; markDirty(); });
+    panel.querySelector('#vLock').addEventListener('click', () => {
+      if (dirty && !confirm('Discard unsaved changes and lock?')) return;
+      lock();
+    });
+  }
+
+  function showSaveError(e) {
+    const el = panel.querySelector('#vListError');
+    if (el) el.textContent = 'Save was blocked — allow downloads for this page and try again.';
+  }
+
+  window.addEventListener('beforeunload', (e) => {
+    if (dirty) { e.preventDefault(); e.returnValue = ''; }
+  });
 
   render();
 }
