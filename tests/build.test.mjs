@@ -30,3 +30,11 @@ test('built html inlines the vault modules', () => {
   assert.ok(html.indexOf('src/vault.js') < html.indexOf('src/app.js'), 'vault.js before app.js');
   assert.ok(html.indexOf('src/app.js') < html.indexOf('src/vault-ui.js'), 'vault-ui.js last');
 });
+
+test('built html inlines vault-bridge, ordered after vault.js and before app.js', () => {
+  execFileSync('node', ['tools/build.mjs'], { stdio: 'pipe' });
+  const html = readFileSync('dist/kunji.html', 'utf8');
+  assert.ok(html.includes('==== src/vault-bridge.js ===='), 'vault-bridge.js concatenated');
+  assert.ok(html.indexOf('src/vault.js') < html.indexOf('src/vault-bridge.js'), 'after vault.js');
+  assert.ok(html.indexOf('src/vault-bridge.js') < html.indexOf('src/app.js'), 'before app.js');
+});
