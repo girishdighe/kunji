@@ -1,0 +1,40 @@
+name: verify-release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  verify-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-tags: true
+
+      - name: Tag is signed by an allowed signer
+        run: |
+          git config gpg.ssh.allowedSignersFile "$GITHUB_WORKSPACE/allowed_signers"
+          git verify-tag "$GITHUB_REF_NAME"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Full verify
+        run: npm run verify
+
+      - name: Rebuilt hash matches the release manifest
+        run: |
+          MANIFEST="releases/${GITHUB_REF_NAME}.txt"
+          test -f "$MANIFEST" || { echo "missing $MANIFEST"; exit 1; }
+          echo "── $MANIFEST ──"; cat "$MANIFEST"; echo "──────────────"
+          WANT=$(grep '^sha256: ' "$MANIFEST" | awk '{print $2}')
+          GOT=$(sha256sum dist/kunji.html | cut -d' ' -f1)
+          echo "manifest=$WANT"
+          echo "rebuilt =$GOT"
+          test "$WANT" = "$GOT"
