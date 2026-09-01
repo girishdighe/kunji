@@ -116,7 +116,78 @@ function initVaultTab() {
   }
 
   // ---- LOCKED / UNLOCKED: filled in Tasks 10-13 ----
-  function renderLocked() { panel.innerHTML = '<p class="v-explain">Locked (Task 10)</p>'; }
+  function renderLocked() {
+    const hint = typeof loadedEnvelope.identityHint === 'string' ? esc(loadedEnvelope.identityHint) : '';
+    panel.innerHTML = `
+      <div class="v-loaded">Vault file loaded.</div>
+      <div class="fields">
+        <div class="field"><input id="vlIdentity" type="text" autocomplete="off" spellcheck="false" placeholder=" " value="${hint}"><label for="vlIdentity">Identity</label></div>
+        <div class="field"><input id="vlPass" type="password" autocomplete="off" spellcheck="false" placeholder=" "><label for="vlPass">Master passphrase</label></div>
+      </div>
+      <div class="kcv" id="vlKcv" data-state="none"><span class="dot"></span> <span id="vlKcvText">enter identity and passphrase</span></div>
+      <button class="btn-primary" id="vlUnlock" type="button">Unlock</button>
+      <div class="v-center-link"><button class="link-btn" id="vlOther" type="button">Open a different file</button></div>
+      <div class="error" id="vlError"></div>
+    `;
+    const identityEl = panel.querySelector('#vlIdentity');
+    const passEl = panel.querySelector('#vlPass');
+    const kcv = panel.querySelector('#vlKcv');
+    const kcvText = panel.querySelector('#vlKcvText');
+
+    async function refresh() {
+      const id = identityEl.value.trim();
+      const pw = passEl.value;
+      if (!id || !pw) { kcv.dataset.state = 'none'; kcvText.textContent = 'enter identity and passphrase'; return; }
+      kcv.dataset.state = 'none'; kcvText.textContent = 'checking…';
+      try {
+        const mk = await deriveMasterKey(pw, id);
+        if (await computeKcv(mk) === loadedEnvelope.kcv) {
+          kcv.dataset.state = 'ok'; kcvText.textContent = 'passphrase matches this vault';
+        } else {
+          kcv.dataset.state = 'bad'; kcvText.textContent = 'not this vault’s passphrase';
+        }
+      } catch {
+        kcv.dataset.state = 'bad'; kcvText.textContent = 'could not derive key';
+      }
+    }
+    identityEl.addEventListener('change', refresh);
+    passEl.addEventListener('change', refresh);
+
+    panel.querySelector('#vlOther').addEventListener('click', () => {
+      if (dirty && !confirm('Discard unsaved changes and open a different file?')) return;
+      loadedEnvelope = null; wipe(); state = 'NO_VAULT'; render();
+    });
+
+    panel.querySelector('#vlUnlock').addEventListener('click', async () => {
+      const errEl = panel.querySelector('#vlError');
+      errEl.textContent = '';
+      const id = identityEl.value.trim();
+      const pw = passEl.value;
+      if (!id || !pw) { errEl.textContent = 'Identity and passphrase are required.'; return; }
+      const btn = panel.querySelector('#vlUnlock');
+      btn.disabled = true; btn.textContent = 'Unlocking…';
+      try {
+        const mk = await deriveMasterKey(pw, id);
+        const out = await unlockVault(loadedEnvelope, { masterKey: mk });
+        masterKey = mk;
+        vault = out;
+        sessionIdentity = id;
+        identityHintOn = typeof loadedEnvelope.identityHint === 'string';
+        dirty = false;
+        state = 'UNLOCKED';
+        render();
+      } catch (e) {
+        btn.disabled = false; btn.textContent = 'Unlock';
+        if (e && e.name === 'WrongPassphraseError') {
+          errEl.textContent = 'That is not the passphrase for this vault.';
+        } else if (e && e.name === 'CorruptVaultError') {
+          errEl.textContent = 'Could not unlock — the file may be corrupted or from a different passphrase.';
+        } else {
+          errEl.textContent = 'Could not unlock this vault.';
+        }
+      }
+    });
+  }
   function renderUnlocked() { panel.innerHTML = '<p class="v-explain">Unlocked (Task 11)</p>'; }
 
   render();
