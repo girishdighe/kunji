@@ -300,3 +300,20 @@ export function mergeVaults(local, incoming) {
   const settings = (incoming.revision || 0) > (local.revision || 0) ? incoming.settings : local.settings;
   return { vault: { entries: out, settings }, summary };
 }
+
+// --- Phase 3d: sync-merge conflict classification ---
+
+// Compare a decrypted incoming file (with its envelope) against the loaded
+// vault (with its envelope). Returns a classification that tells the UI how
+// to route the merge.
+export function classifyIncoming(localEnv, localVault, inEnv, inVault) {
+  if (inEnv.kcv !== localEnv.kcv) return 'wrong-passphrase';
+  const eq = (a, b) => JSON.stringify(a.entries) === JSON.stringify(b.entries)
+    && JSON.stringify(a.settings) === JSON.stringify(b.settings);
+  const localWithMeta = { ...localVault, revision: localEnv.revision, lastWriter: localEnv.lastWriter };
+  const inWithMeta = { ...inVault, revision: inEnv.revision, lastWriter: inEnv.lastWriter };
+  const merged = mergeVaults(localWithMeta, inWithMeta).vault;
+  if (eq(merged, localVault)) return 'same';
+  if (eq(merged, inVault) && (inEnv.revision || 0) >= (localEnv.revision || 0)) return 'fast-forward';
+  return 'diverged';
+}

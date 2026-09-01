@@ -551,3 +551,34 @@ test('mergeVaults: order = local order then incoming-only appended', () => {
   const r = vault([ent({ id: '2' }), ent({ id: '3' }), ent({ id: '1' })], 2, 'B');
   assert.deepEqual(mergeVaults(l, r).vault.entries.map((e) => e.id), ['1', '2', '3']);
 });
+
+import { classifyIncoming } from '../src/vault.js';
+
+const envOf = (kcv, revision) => ({ kcv, revision });
+
+test('classifyIncoming: wrong-passphrase when kcv differs', () => {
+  assert.equal(
+    classifyIncoming(envOf('AAAA', 1), vault([]), envOf('BBBB', 1), vault([])),
+    'wrong-passphrase',
+  );
+});
+
+test('classifyIncoming: same when merge equals local', () => {
+  const e = ent({ id: '1' });
+  assert.equal(
+    classifyIncoming(envOf('K', 1), vault([e]), envOf('K', 1), vault([{ ...e }])),
+    'same',
+  );
+});
+
+test('classifyIncoming: fast-forward when merge equals incoming and revision >=', () => {
+  const local = vault([ent({ id: '1' })], 3);
+  const incoming = vault([ent({ id: '1' }), ent({ id: '2', name: 'new' })], 5);
+  assert.equal(classifyIncoming(envOf('K', 3), local, envOf('K', 5), incoming), 'fast-forward');
+});
+
+test('classifyIncoming: diverged when each side has a unique change', () => {
+  const local = vault([ent({ id: '1' }), ent({ id: 'L', name: 'local-only' })], 3);
+  const incoming = vault([ent({ id: '1' }), ent({ id: 'R', name: 'remote-only' })], 4);
+  assert.equal(classifyIncoming(envOf('K', 3), local, envOf('K', 4), incoming), 'diverged');
+});
