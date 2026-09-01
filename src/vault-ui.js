@@ -21,6 +21,7 @@ function initVaultTab() {
   let selectedId = null;
   let listQuery = '';
   let sessionMoveNoteShown = false;
+  let idleTimer = null;
 
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]
@@ -192,7 +193,20 @@ function initVaultTab() {
   }
   function markDirty() { dirty = true; if (state === 'UNLOCKED' && view === 'list') renderList(); }
 
+  function clearIdle() { if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; } }
+
+  function armIdle() {
+    clearIdle();
+    if (state !== 'UNLOCKED') return;
+    const mins = (vault && vault.settings && vault.settings.autoLockMinutes) || 5;
+    idleTimer = setTimeout(() => {
+      // discard unsaved edits — the lock guarantee wins
+      lock();
+    }, mins * 60 * 1000);
+  }
+
   function lock() {
+    clearIdle();
     // keep loadedEnvelope so re-unlock only needs the passphrase
     wipe();
     state = loadedEnvelope ? 'LOCKED' : 'NO_VAULT';
@@ -232,6 +246,7 @@ function initVaultTab() {
   }
 
   function renderUnlocked() {
+    armIdle();
     if (view === 'detail') return renderDetail();
     if (view === 'editor') return renderEditor();
     return renderList();
@@ -507,6 +522,10 @@ function initVaultTab() {
   window.addEventListener('beforeunload', (e) => {
     if (dirty) { e.preventDefault(); e.returnValue = ''; }
   });
+
+  ['keydown', 'pointerdown'].forEach((evt) =>
+    panel.addEventListener(evt, () => { if (state === 'UNLOCKED') armIdle(); }),
+  );
 
   render();
 }
