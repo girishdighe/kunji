@@ -28,3 +28,60 @@ export function newDecoyBytes(ctLen) {
     ct: bytesToBase64(randomBytes(ctLen)),
   };
 }
+
+export function createVault() {
+  return {
+    entries: [],
+    settings: {
+      clipboardClearSeconds: 25,
+      revealSeconds: 20,
+      defaultRules: 'standard',
+      defaultLength: 20,
+      autoLockMinutes: 5,
+    },
+  };
+}
+
+export function makeEntry(partial) {
+  const now = new Date().toISOString();
+  const common = {
+    name: '', site: '', account: '', notes: '',
+    ...partial,
+    id: crypto.randomUUID(),
+    updatedAt: now,
+  };
+  if (partial.type === 'sso') {
+    return {
+      ...common,
+      type: 'sso',
+      via: partial.via ? { site: partial.via.site ?? '', account: partial.via.account ?? '' } : { site: '', account: '' },
+    };
+  }
+  return {
+    ...common,
+    type: 'password',
+    profile: 'v1',
+    counter: partial.counter ?? 1,
+    length: partial.length ?? 20,
+    rules: partial.rules ?? 'standard',
+    totp: partial.totp ?? null,
+    recoveryCodes: partial.recoveryCodes ?? [],
+  };
+}
+
+export function addEntry(vault, partial) {
+  return { ...vault, entries: [...vault.entries, makeEntry(partial)] };
+}
+
+export function updateEntry(vault, id, patch) {
+  return {
+    ...vault,
+    entries: vault.entries.map((e) =>
+      e.id === id ? { ...e, ...patch, id: e.id, updatedAt: new Date().toISOString() } : e,
+    ),
+  };
+}
+
+export function removeEntry(vault, id) {
+  return { ...vault, entries: vault.entries.filter((e) => e.id !== id) };
+}
