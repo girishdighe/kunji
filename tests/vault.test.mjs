@@ -477,3 +477,77 @@ test('encodeEnvelope decoy: a fresh IV per slot per call', async () => {
   assert.notEqual(a.decoy.iv, bEnv.decoy.iv);
   assert.notEqual(a.iv, a.decoy.iv);
 });
+
+import { mergeVaults } from '../src/vault.js';
+
+const at = (s) => new Date(s).toISOString();
+const ent = (over) => ({ id: 'x', type: 'password', name: 'n', site: 's', account: 'a', counter: 1, length: 20, rules: 'standard', profile: 'v1', totp: null, recoveryCodes: [], notes: '', updatedAt: at('2026-01-01'), ...over });
+const vault = (entries, revision = 1, lastWriter = 'A') => ({ entries, settings: { autoLockMinutes: 5 }, revision, lastWriter });
+
+test('mergeVaults: incoming-only id is added', () => {
+  const local = vault([ent({ id: '1' })]);
+  const incoming = vault([ent({ id: '1' }), ent({ id: '2', name: 'new' })], 2, 'B');
+  const { vault: m, summary } = mergeVaults(local, incoming);
+  assert.deepEqual(m.entries.map((e) => e.id), ['1', '2']);
+  assert.deepEqual(summary.added, ['2']);
+});
+
+test('mergeVaults: shared entry — newer updatedAt wins both directions', () => {
+  const l1 = mergeVaults(
+    vault([ent({ id: '1', name: 'old', updatedAt: at('2026-01-01') })]),
+    vault([ent({ id: '1', name: 'NEW', updatedAt: at('2026-02-01') })], 2, 'B'),
+  );
+  assert.equal(l1.vault.entries[0].name, 'NEW');
+  assert.deepEqual(l1.summary.updated, ['1']);
+  const l2 = mergeVaults(
+    vault([ent({ id: '1', name: 'LOCAL', updatedAt: at('2026-03-01') })]),
+    vault([ent({ id: '1', name: 'old', updatedAt: at('2026-02-01') })], 2, 'B'),
+  );
+  assert.equal(l2.vault.entries[0].name, 'LOCAL');
+});
+
+test('mergeVaults: incoming tombstone newer than local live entry -> deleted', () => {
+  const { vault: m, summary } = mergeVaults(
+    vault([ent({ id: '1', updatedAt: at('2026-01-01') })]),
+    vault([{ id: '1', deleted: true, updatedAt: at('2026-02-01') }], 2, 'B'),
+  );
+  assert.equal(m.entries[0].deleted, true);
+  assert.deepEqual(summary.deletedByRemote, ['1']);
+});
+
+test('mergeVaults: local tombstone older than incoming live entry -> resurrected', () => {
+  const { vault: m, summary } = mergeVaults(
+    vault([{ id: '1', deleted: true, updatedAt: at('2026-01-01') }]),
+    vault([ent({ id: '1', name: 'back', updatedAt: at('2026-02-01') })], 2, 'B'),
+  );
+  assert.equal(m.entries[0].name, 'back');
+  assert.deepEqual(summary.updated, ['1']);
+});
+
+test('mergeVaults: equal entries -> unchanged count, no buckets', () => {
+  const e = ent({ id: '1' });
+  const { summary } = mergeVaults(vault([e]), vault([{ ...e }], 2, 'B'));
+  assert.equal(summary.unchanged, 1);
+  assert.deepEqual([summary.added, summary.updated, summary.deletedByRemote, summary.deletedByLocal], [[], [], [], []]);
+});
+
+test('mergeVaults: updatedAt tie broken by lastWriter, then local; deterministic both ways', () => {
+  const l = vault([ent({ id: '1', name: 'L', updatedAt: at('2026-01-01') })], 1, 'A');
+  const r = vault([ent({ id: '1', name: 'R', updatedAt: at('2026-01-01') })], 1, 'B');
+  const ab = mergeVaults(l, r).vault.entries[0].name;
+  const ba = mergeVaults(r, l).vault.entries[0].name;
+  assert.equal(ab, ba, 'commutative outcome');
+});
+
+test('mergeVaults: settings follow the higher revision', () => {
+  const l = { entries: [], settings: { autoLockMinutes: 5 }, revision: 1, lastWriter: 'A' };
+  const r = { entries: [], settings: { autoLockMinutes: 1 }, revision: 9, lastWriter: 'B' };
+  assert.equal(mergeVaults(l, r).vault.settings.autoLockMinutes, 1);
+  assert.equal(mergeVaults(r, l).vault.settings.autoLockMinutes, 1);
+});
+
+test('mergeVaults: order = local order then incoming-only appended', () => {
+  const l = vault([ent({ id: '1' }), ent({ id: '2' })]);
+  const r = vault([ent({ id: '2' }), ent({ id: '3' }), ent({ id: '1' })], 2, 'B');
+  assert.deepEqual(mergeVaults(l, r).vault.entries.map((e) => e.id), ['1', '2', '3']);
+});

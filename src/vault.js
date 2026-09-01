@@ -258,3 +258,45 @@ export function padPlaintextTo(obj, targetBytes) {
   if (need < 0) throw new Error(`padPlaintextTo: object is ${-need} bytes over target`);
   return json + ' '.repeat(need);
 }
+
+// Phase 3d: entry-level last-writer-wins merge. `local`/`incoming` are decrypted
+// vaults plus their envelope `revision` and `lastWriter`. Deterministic; the
+// resulting `vault` is the same for mergeVaults(a,b) and mergeVaults(b,a) (only
+// the summary's *ByRemote/*ByLocal labels swap).
+export function mergeVaults(local, incoming) {
+  const li = new Map(local.entries.map((e) => [e.id, e]));
+  const ri = new Map(incoming.entries.map((e) => [e.id, e]));
+  const summary = { added: [], updated: [], deletedByRemote: [], deletedByLocal: [], unchanged: 0 };
+
+  const pick = (a, b) => {
+    // both defined; choose the winner
+    const ta = a.updatedAt || '';
+    const tb = b.updatedAt || '';
+    if (ta > tb) return a;
+    if (tb > ta) return b;
+    // tie: lastWriter order, then local (a)
+    const wa = local.lastWriter || '';
+    const wb = incoming.lastWriter || '';
+    return wb > wa ? b : a;
+  };
+
+  const out = [];
+  for (const e of local.entries) {
+    const other = ri.get(e.id);
+    if (!other) { out.push(e); summary.unchanged += 1; continue; }
+    if (JSON.stringify(e) === JSON.stringify(other)) { out.push(e); summary.unchanged += 1; continue; }
+    const winner = pick(e, other);
+    out.push(winner);
+    const localDel = !!e.deleted;
+    const remoteDel = !!other.deleted;
+    if (winner === other && remoteDel && !localDel) summary.deletedByRemote.push(e.id);
+    else if (winner === e && localDel && !remoteDel) summary.deletedByLocal.push(e.id);
+    else summary.updated.push(e.id);
+  }
+  for (const e of incoming.entries) {
+    if (!li.has(e.id)) { out.push(e); summary.added.push(e.id); }
+  }
+
+  const settings = (incoming.revision || 0) > (local.revision || 0) ? incoming.settings : local.settings;
+  return { vault: { entries: out, settings }, summary };
+}
