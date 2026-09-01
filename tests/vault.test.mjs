@@ -128,7 +128,7 @@ test('visibleEntries filters tombstones, preserves order, does not mutate', () =
 });
 
 import { encodeEnvelope } from '../src/vault.js';
-import { deriveVaultKey, computeKcv, PBKDF2_ITERATIONS } from '../src/derive.js';
+import { deriveVaultKey, computeKcv, PBKDF2_ITERATIONS, PROFILES } from '../src/derive.js';
 import { hexToBytes, base64ToBytes as b64 } from '../src/encoding.js';
 
 const MK = hexToBytes('ab'.repeat(31) + '12');
@@ -276,6 +276,25 @@ test('parseEnvelope rejects a missing, non-integer, or negative revision', async
     if (rev === undefined) delete bad.revision; else bad.revision = rev;
     assert.throws(() => parseEnvelope(JSON.stringify(bad)), BadEnvelopeError);
   }
+});
+
+test('encodeEnvelope stamps the v1 profile kdf tag', async () => {
+  const v = addEntry(createVault(), { name: 'A', site: 's', account: 'a' });
+  const env = JSON.parse(await encodeEnvelope(v, { masterKey: MK, writerId: 'w' }));
+  assert.equal(env.kdf, PROFILES.v1.kdfTag);
+});
+
+test('parseEnvelope rejects a header with an unknown kdf', async () => {
+  const v = addEntry(createVault(), { name: 'A', site: 's', account: 'a' });
+  const env = JSON.parse(await encodeEnvelope(v, { masterKey: MK, writerId: 'w' }));
+  env.kdf = 'argon2id-m65536-t3-p1';
+  assert.throws(() => parseEnvelope(JSON.stringify(env)), /unknown KDF/);
+});
+
+test('parseEnvelope still accepts the current pbkdf2 tag', async () => {
+  const v = addEntry(createVault(), { name: 'A', site: 's', account: 'a' });
+  const text = await encodeEnvelope(v, { masterKey: MK, writerId: 'w' });
+  assert.doesNotThrow(() => parseEnvelope(text));
 });
 
 test('makeEntry sso branch drops stray password fields; password branch drops stray via', () => {

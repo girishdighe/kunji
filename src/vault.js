@@ -1,6 +1,6 @@
 import { utf8, bytesToBase64, base64ToBytes, fromUtf8 } from './encoding.js';
 import { aesGcmEncrypt, aesGcmDecrypt } from './webcrypto.js';
-import { deriveVaultKey, computeKcv, PBKDF2_ITERATIONS, normaliseInput } from './derive.js';
+import { deriveVaultKey, computeKcv, PBKDF2_ITERATIONS, normaliseInput, PROFILES } from './derive.js';
 
 export const VAULT_FORMAT = 'kunji-data';
 export const VAULT_V = 1;
@@ -172,6 +172,8 @@ export function parseEnvelope(text) {
   if (!Number.isInteger(env.revision) || env.revision < 0) {
     throw new BadEnvelopeError('missing or invalid revision');
   }
+  const knownKdf = Object.values(PROFILES).some((p) => p.kdfTag === env.kdf);
+  if (!knownKdf) throw new BadEnvelopeError(`unknown KDF: ${env.kdf}`);
   return env;
 }
 
