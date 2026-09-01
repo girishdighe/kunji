@@ -34,6 +34,11 @@ is one AES-256-GCM blob; it holds no derived passwords, only entry parameters,
 notes, TOTP secrets and recovery codes. "Save vault" downloads a fresh copy —
 move it wherever your sync tool watches.
 
+The Generate tab shows a "which account?" picker when a site you type matches
+one or more vault entries (vault unlocked). A second **decoy** master passphrase
+can be set from the unlocked vault; it opens a separate, believable vault, and
+the file gives no sign that a real decoy exists.
+
 ## The v1 profile is frozen
 
 `tests/vectors/v1.json` locks the derivation output. Any code change that alters a

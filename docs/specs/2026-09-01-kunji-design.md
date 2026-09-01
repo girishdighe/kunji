@@ -202,6 +202,14 @@ green "verified" dot when the typed passphrase reproduces the stored KCV.
   else reject.
 - The decoy vault is an ordinary vault the user populates with believable but
   useless entries.
+- To keep the real and decoy ciphertexts the same length, `encodeEnvelope` pads
+  both slot plaintexts with trailing ASCII spaces up to the next `PAD_BLOCK`
+  (2048-byte) boundary above the larger before encryption; `JSON.parse` ignores
+  the trailing whitespace, and the loader returns only `{ entries, settings }`.
+  Quantising to a block also gives a later duress edit of the decoy room to grow
+  within the real ct's fixed length.
+- A decoy passphrase whose KCV equals the real KCV is rejected at setup, so the
+  real-then-decoy unlock routing in `openVault` is unambiguous.
 
 ---
 
@@ -274,6 +282,12 @@ An entry is identified by `site + account`. Three Google identities are three
 entries with `site = "google.com"` and different `account` values, producing
 three independent passwords. When the user enters a site that matches more than
 one entry, Kunji shows a small "which account?" picker rather than guessing.
+
+The picker is a Generate-tab overlay, available only while a vault is unlocked
+this session; it fills `account` and the entry's `counter`/`rules`/`length`,
+and for an `sso` entry it redirects to the underlying entry. Derivation still
+uses the Generate tab's own identity + passphrase (see
+`docs/specs/2026-09-01-kunji-phase3a-account-picker-design.md`).
 
 Sites you log into *with* Google (OAuth) get `type: "sso"`: no password is
 derived, the entry records which identity to use and points at the underlying
@@ -449,8 +463,12 @@ a later enhancement where the platform supports the PRF extension. Not in v1.
    editor, SSO entries, and the always-present random `decoy` envelope section
    (decoy *authoring* and the Generate-tab account picker move to Phase 3).
    Import is "open a file"; export is "save vault" (a download).
-3. **Portability.** QR export/import, sync-conflict detection and per-entry
-   merge, service worker for offline install, PWA manifest.
+3. **Portability.** Split into sub-projects, each with its own design spec:
+   3a account picker (`2026-09-01-kunji-phase3a-account-picker-design.md`),
+   3b decoy authoring (`2026-09-01-kunji-phase3b-decoy-authoring-design.md`),
+   3c PWA + service worker (`…-phase3c-pwa-service-worker-design.md`),
+   3d sync merge (`…-phase3d-sync-merge-design.md`),
+   3e QR transfer (`…-phase3e-qr-transfer-design.md`).
 4. **Distribution.** Reproducible build script, release checksums, signed tags,
    CI invariant + test-vector gates, docs for Syncthing / private git / manual.
 5. **Later, optional.** Own Argon2id as profile `v2`; WebAuthn biometric unlock;
