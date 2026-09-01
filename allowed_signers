@@ -1,0 +1,4 @@
+# Maintainer SSH signing key. Regenerate with:
+#   echo "$(git config user.email) namespaces=\"git,file\" $(ssh-keygen -y -f \"$(git config user.signingkey)\")" > allowed_signers
+# TODO(maintainer): replace the line below with your real signing key before the first release.
+maintainer@example.invalid namespaces="git,file" ssh-ed25519 AAAAPLACEHOLDERDONOTUSE placeholder
