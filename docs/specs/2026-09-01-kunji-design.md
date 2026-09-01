@@ -446,8 +446,9 @@ a later enhancement where the platform supports the PRF extension. Not in v1.
    vectors, PBKDF2 KDF, KCV, X-style UI, copy with auto-clear. No persistence
    beyond in-memory. Ships as one auditable `kunji.html`.
 2. **Vault.** `kunji-data.json` read/write, AES-256-GCM, entry list, entry
-   editor, the account picker, SSO entries, decoy section, import/export as
-   encrypted file.
+   editor, SSO entries, and the always-present random `decoy` envelope section
+   (decoy *authoring* and the Generate-tab account picker move to Phase 3).
+   Import is "open a file"; export is "save vault" (a download).
 3. **Portability.** QR export/import, sync-conflict detection and per-entry
    merge, service worker for offline install, PWA manifest.
 4. **Distribution.** Reproducible build script, release checksums, signed tags,
