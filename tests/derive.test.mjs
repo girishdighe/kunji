@@ -309,3 +309,27 @@ test('deriveVaultKey frozen vector', async () => {
   const vk = await deriveVaultKey(FIXED_MK);
   assert.equal(bytesToHex(vk), '8ef1c3640682b7a78ba8847a094450389fbcad5e80f78d26823cdd9927d0c1cb');
 });
+
+import { PROFILES, profileOf, DEFAULT_PROFILE } from '../src/derive.js';
+
+test('PROFILES has exactly v1 and DEFAULT_PROFILE points to it', () => {
+  assert.deepEqual(Object.keys(PROFILES), ['v1']);
+  assert.equal(DEFAULT_PROFILE, 'v1');
+  assert.equal(PROFILES.v1.id, 'v1');
+  assert.equal(PROFILES.v1.kdfTag, 'pbkdf2-sha512-600000');
+  assert.equal(typeof PROFILES.v1.deriveMasterKey, 'function');
+});
+
+test('profileOf returns the profile or throws on an unknown id', () => {
+  assert.equal(profileOf('v1').id, 'v1');
+  assert.throws(() => profileOf('v2'), /unknown profile: v2/);
+  assert.throws(() => profileOf(''), /unknown profile:/);
+});
+
+test('PROFILES.v1.deriveMasterKey matches raw PBKDF2 for a known input', async () => {
+  const { pbkdf2Sha512 } = await import('../src/webcrypto.js');
+  const { utf8 } = await import('../src/encoding.js');
+  const got = await PROFILES.v1.deriveMasterKey('pw', 'alex@example.com');
+  const want = await pbkdf2Sha512(utf8('pw'), utf8('alex@example.com'), 600000, 32);
+  assert.deepEqual(got, want);
+});

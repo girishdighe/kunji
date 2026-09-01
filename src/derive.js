@@ -6,6 +6,29 @@ export const PROFILE = 'v1';
 // OPEN DECISION (spec s13): confirm on the slowest target device before freezing v1.
 export const PBKDF2_ITERATIONS = 600000;
 
+// --- Profile registry -----------------------------------------------------
+// Every master-key derivation routes through a profile so a future KDF (v2)
+// is a one-object drop-in. See docs/specs/2026-09-01-kunji-v2-profile-requirements.md.
+
+export const PROFILES = {
+  v1: {
+    id: 'v1',
+    label: 'PBKDF2-HMAC-SHA512',
+    // passphrase: raw string; normalisedIdentity: already NFKC+trim+lowercase
+    deriveMasterKey: (passphrase, normalisedIdentity) =>
+      pbkdf2Sha512(utf8(passphrase), utf8(normalisedIdentity), PBKDF2_ITERATIONS, MASTER_KEY_BYTES),
+    kdfTag: `pbkdf2-sha512-${PBKDF2_ITERATIONS}`,
+  },
+};
+
+export const DEFAULT_PROFILE = 'v1';
+
+export function profileOf(id) {
+  const p = PROFILES[id];
+  if (!p) throw new Error(`unknown profile: ${id}`);
+  return p;
+}
+
 export const MASTER_KEY_BYTES = 32;
 export const DEFAULT_LENGTH = 20;
 export const MIN_LENGTH = 8;
