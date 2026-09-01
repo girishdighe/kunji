@@ -295,6 +295,100 @@ function initVaultTab() {
     if (el) el.textContent = 'Save was blocked — allow downloads for this page and try again.';
   }
 
+  function selectedEntry() { return vault.entries.find((e) => e.id === selectedId) || null; }
+
+  async function renderDetail() {
+    const e = selectedEntry();
+    if (!e) { view = 'list'; return renderList(); }
+
+    if (e.type === 'sso') {
+      panel.innerHTML = `
+        <div class="v-bar"><button class="link-btn" id="vBack" type="button">&lsaquo; Vault</button><button class="link-btn" id="vEdit" type="button">Edit</button></div>
+        <div class="title" style="font-size:18px">${esc(e.name)}</div>
+        <div class="v-meta">${esc(e.site)} &middot; ${esc(e.account)}</div>
+        <div class="v-sec"><div class="v-h">Log in via</div><div>${esc(e.via && e.via.site)} &middot; ${esc(e.via && e.via.account)}</div></div>
+        <div class="v-sec"><div class="v-h">Notes</div><div class="v-meta">${esc(e.notes) || '—'}</div></div>
+      `;
+      panel.querySelector('#vBack').addEventListener('click', () => { view = 'list'; render(); });
+      panel.querySelector('#vEdit').addEventListener('click', () => { view = 'editor'; render(); });
+      return;
+    }
+
+    const codes = Array.isArray(e.recoveryCodes) ? e.recoveryCodes : [];
+    panel.innerHTML = `
+      <div class="v-bar"><button class="link-btn" id="vBack" type="button">&lsaquo; Vault</button><button class="link-btn" id="vEdit" type="button">Edit</button></div>
+      <div class="title" style="font-size:18px">${esc(e.name)}</div>
+      <div class="v-meta">${esc(e.site)} &middot; ${esc(e.account)}</div>
+      <div style="margin:8px 0">
+        <span class="v-chip">${esc(e.profile)}</span><span class="v-chip">len ${esc(e.length)}</span><span class="v-chip">${esc(e.rules)}</span><span class="v-chip">counter ${esc(e.counter)}</span>
+      </div>
+      <div class="result-value empty" id="vPw">not derived</div>
+      <div><button class="link-btn" id="vReveal" type="button">Reveal</button> &middot; <button class="link-btn" id="vCopy" type="button">Copy</button></div>
+      <div class="error" id="vDetailError"></div>
+      <div class="v-sec"><div class="v-h">Notes</div><div class="v-meta">${esc(e.notes) || '—'}</div></div>
+      <div class="v-sec"><div class="v-h">Recovery codes &middot; ${codes.length}</div><div id="vCodes" class="v-meta">${codes.length ? '<button class="link-btn" id="vShowCodes" type="button">Reveal / copy</button>' : '—'}</div></div>
+      <div class="v-sec"><div class="v-h">TOTP secret</div><div class="v-meta">${e.totp ? '&bull;&bull;&bull;&bull; <button class="link-btn" id="vTotpCopy" type="button">copy</button>' : '—'}</div></div>
+    `;
+
+    panel.querySelector('#vBack').addEventListener('click', () => { view = 'list'; render(); });
+    panel.querySelector('#vEdit').addEventListener('click', () => { view = 'editor'; render(); });
+
+    const pwEl = panel.querySelector('#vPw');
+    const errEl = panel.querySelector('#vDetailError');
+    let plaintext = '';
+    let revealTimer = null;
+
+    async function derive() {
+      if (plaintext) return plaintext;
+      plaintext = await derivePassword({
+        masterKey, site: e.site, account: e.account,
+        counter: e.counter, rules: e.rules, length: e.length,
+      });
+      return plaintext;
+    }
+
+    panel.querySelector('#vReveal').addEventListener('click', async () => {
+      errEl.textContent = '';
+      try {
+        const pw = await derive();
+        pwEl.classList.remove('empty');
+        pwEl.textContent = groupInFours(pw);
+        if (revealTimer) clearTimeout(revealTimer);
+        revealTimer = setTimeout(() => {
+          pwEl.textContent = groupInFours('•'.repeat(pw.length));
+        }, (vault.settings.revealSeconds || 20) * 1000);
+      } catch (err) { errEl.textContent = err.message; }
+    });
+
+    panel.querySelector('#vCopy').addEventListener('click', async () => {
+      errEl.textContent = '';
+      try {
+        const pw = await derive();
+        try { await navigator.clipboard.writeText(pw); }
+        catch {
+          const ta = document.createElement('textarea'); ta.value = pw;
+          document.body.appendChild(ta); ta.select();
+          try { document.execCommand('copy'); } catch (_) {}
+          document.body.removeChild(ta);
+        }
+        const btn = panel.querySelector('#vCopy');
+        btn.textContent = 'Copied';
+        setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+        setTimeout(async () => { try { await navigator.clipboard.writeText(''); } catch (_) {} },
+          (vault.settings.clipboardClearSeconds || 25) * 1000);
+      } catch (err) { errEl.textContent = err.message; }
+    });
+
+    const showCodes = panel.querySelector('#vShowCodes');
+    if (showCodes) showCodes.addEventListener('click', () => {
+      panel.querySelector('#vCodes').innerHTML = codes.map((c) => esc(c)).join('<br>');
+    });
+    const totpCopy = panel.querySelector('#vTotpCopy');
+    if (totpCopy) totpCopy.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(e.totp); totpCopy.textContent = 'copied'; } catch (_) {}
+    });
+  }
+
   window.addEventListener('beforeunload', (e) => {
     if (dirty) { e.preventDefault(); e.returnValue = ''; }
   });
