@@ -138,16 +138,12 @@ export function parseEnvelope(text) {
   return env;
 }
 
-export async function unlockVault(envelope, { masterKey }) {
-  if (await computeKcv(masterKey) !== envelope.kcv) {
-    throw new WrongPassphraseError('that is not the passphrase for this vault');
-  }
-  const vaultKey = await deriveVaultKey(masterKey);
+// Decrypt one slot's ciphertext and validate the plaintext shape. Drops `_pad`
+// (Phase 3b length-matching filler) by returning only { entries, settings }.
+async function decryptSlot(vaultKey, ivB64, ctB64) {
   let plainBytes;
   try {
-    plainBytes = await aesGcmDecrypt(
-      vaultKey, base64ToBytes(envelope.iv), base64ToBytes(envelope.ct), VAULT_AAD,
-    );
+    plainBytes = await aesGcmDecrypt(vaultKey, base64ToBytes(ivB64), base64ToBytes(ctB64), VAULT_AAD);
   } catch {
     throw new CorruptVaultError('the file could not be decrypted');
   }
@@ -162,6 +158,29 @@ export async function unlockVault(envelope, { masterKey }) {
     throw new CorruptVaultError('the vault contents are not in the expected shape');
   }
   return { entries: plain.entries, settings: plain.settings };
+}
+
+export async function unlockVault(envelope, { masterKey }) {
+  if (await computeKcv(masterKey) !== envelope.kcv) {
+    throw new WrongPassphraseError('that is not the passphrase for this vault');
+  }
+  const vaultKey = await deriveVaultKey(masterKey);
+  return decryptSlot(vaultKey, envelope.iv, envelope.ct);
+}
+
+// Try the real slot first (KCV match), then the decoy slot. Returns the
+// decrypted vault plus which slot it came from. `WrongPassphraseError` when the
+// passphrase matches neither.
+export async function openVault(envelope, { masterKey }) {
+  const k = await computeKcv(masterKey);
+  const vaultKey = await deriveVaultKey(masterKey);
+  if (k === envelope.kcv) {
+    return { slot: 'real', ...(await decryptSlot(vaultKey, envelope.iv, envelope.ct)) };
+  }
+  if (envelope.decoy && k === envelope.decoy.kcv) {
+    return { slot: 'decoy', ...(await decryptSlot(vaultKey, envelope.decoy.iv, envelope.decoy.ct)) };
+  }
+  throw new WrongPassphraseError('that passphrase does not match this vault');
 }
 
 // --- Phase 3a: account-picker lookups (pure) ---

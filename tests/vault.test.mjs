@@ -348,3 +348,28 @@ test('padPlaintextTo _pad uses only base64 characters (no JSON escaping)', () =>
   const padded = padPlaintextTo({ entries: [], settings: {} }, 600);
   assert.match(padded._pad, /^[A-Za-z0-9+/]*$/);
 });
+
+import { openVault } from '../src/vault.js';
+
+const RMK = hexToBytes('ab'.repeat(31) + '12'); // same 32 bytes as MK
+const DMK = hexToBytes('cd'.repeat(32));        // same as OTHER_MK
+
+test('openVault routes to the real slot for the real passphrase', async () => {
+  const real = addEntry(createVault(), { name: 'R', site: 'r', account: 'r' });
+  const env = parseEnvelope(await encodeEnvelope(real, { masterKey: RMK, writerId: 'w' }));
+  const out = await openVault(env, { masterKey: RMK });
+  assert.equal(out.slot, 'real');
+  assert.equal(out.entries[0].name, 'R');
+  assert.equal(out._pad, undefined);
+});
+
+test('openVault throws WrongPassphraseError for a passphrase matching neither slot', async () => {
+  const env = parseEnvelope(await encodeEnvelope(createVault(), { masterKey: RMK, writerId: 'w' }));
+  await assert.rejects(() => openVault(env, { masterKey: hexToBytes('ef'.repeat(32)) }), WrongPassphraseError);
+});
+
+test('openVault on a decoy-less (random filler) envelope: real works, decoy passphrase rejects', async () => {
+  const env = parseEnvelope(await encodeEnvelope(addEntry(createVault(), { name: 'R', site: 'r', account: 'r' }), { masterKey: RMK, writerId: 'w' }));
+  assert.equal((await openVault(env, { masterKey: RMK })).slot, 'real');
+  await assert.rejects(() => openVault(env, { masterKey: DMK }), WrongPassphraseError);
+});
