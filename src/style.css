@@ -212,3 +212,9 @@ select option { background: var(--surface); color: var(--text); }
 .v-merge-row { display: flex; justify-content: space-between; padding: 9px 0; border-top: 1px solid #1a1c1f; cursor: pointer; }
 .v-merge-row .n { color: var(--muted); }
 .v-merge-detail { font-size: 12px; color: var(--muted); padding: 4px 0 8px 10px; }
+
+/* QR transfer (Phase 3e) */
+.qr-panel { text-align: center; }
+.qr-cam { width: 100%; max-width: 320px; border-radius: 8px; background: #000; }
+.qr-canvas { image-rendering: pixelated; }
+.qr-progress { font-size: 12px; color: var(--muted); margin: 8px 0; }

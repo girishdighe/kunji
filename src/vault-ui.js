@@ -105,6 +105,7 @@ function initVaultTab() {
   }
 
   function wipe() {
+    stopScan();
     masterKey = null;
     vault = null;
     sessionIdentity = '';
@@ -574,6 +575,54 @@ function initVaultTab() {
     });
   }
 
+  // NOTE: a tab switch to Generate mid-scan keeps the camera running until
+  // Cancel or lock — accepted limitation of this minimal version.
+  let scanStream = null;
+  function stopScan() {
+    if (scanStream) { scanStream.getTracks().forEach((t) => t.stop()); scanStream = null; }
+  }
+
+  async function scanQr(onEnvelopeText) {
+    panel.innerHTML = `
+      <div class="v-bar"><button class="link-btn" id="scCancel" type="button">&lsaquo; Cancel</button></div>
+      <div class="qr-panel">
+        <video class="qr-cam" id="scVideo" playsinline muted></video>
+        <div class="qr-progress" id="scProgress">point at the other device…</div>
+      </div>
+      <div class="error" id="scError"></div>
+    `;
+    panel.querySelector('#scCancel').addEventListener('click', () => { stopScan(); render(); });
+    const video = panel.querySelector('#scVideo');
+    const prog = panel.querySelector('#scProgress');
+    const cv = document.createElement('canvas');
+    const collected = [];
+    try {
+      scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    } catch {
+      panel.querySelector('#scError').textContent = 'Camera unavailable — use Open vault file instead.';
+      return;
+    }
+    video.srcObject = scanStream;
+    await video.play().catch(() => {});
+    const tick = () => {
+      if (!scanStream) return;
+      const w = 480, scale = video.videoWidth ? w / video.videoWidth : 1;
+      cv.width = w; cv.height = Math.round(video.videoHeight * scale) || w;
+      const ctx = cv.getContext('2d');
+      ctx.drawImage(video, 0, 0, cv.width, cv.height);
+      const bytes = decodeQr(ctx.getImageData(0, 0, cv.width, cv.height));
+      if (bytes) {
+        const frame = new TextDecoder().decode(bytes);
+        if (!collected.includes(frame)) collected.push(frame);
+        const res = joinTransfer(collected);
+        if (res.text) { stopScan(); onEnvelopeText(res.text); return; }
+        if (res.need) prog.textContent = `scanning… ${collected.length} of ${collected.length + res.need.length} frames`;
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+
   function showSaveError(e) {
     const el = panel.querySelector('#vListError');
     if (el) el.textContent = 'Save was blocked — allow downloads for this page and try again.';
@@ -812,6 +861,7 @@ function initVaultTab() {
   window.addEventListener('beforeunload', (e) => {
     if (dirty) { e.preventDefault(); e.returnValue = ''; }
   });
+  window.addEventListener('beforeunload', stopScan);
 
   ['keydown', 'pointerdown'].forEach((evt) =>
     panel.addEventListener(evt, () => { if (state === 'UNLOCKED') armIdle(); }),
