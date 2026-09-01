@@ -109,3 +109,48 @@ test('removeEntry drops by id', () => {
   v = removeEntry(v, id);
   assert.equal(v.entries.length, 0);
 });
+
+import { encodeEnvelope } from '../src/vault.js';
+import { deriveVaultKey, computeKcv, PBKDF2_ITERATIONS } from '../src/derive.js';
+import { hexToBytes, base64ToBytes as b64 } from '../src/encoding.js';
+
+const MK = hexToBytes('ab'.repeat(31) + '12');
+
+test('encodeEnvelope produces a valid, complete envelope string', async () => {
+  const vault = addEntry(createVault(), { name: 'A', site: 's', account: 'a' });
+  const text = await encodeEnvelope(vault, { masterKey: MK, prevRevision: 41, writerId: 'w-1' });
+  const env = JSON.parse(text);
+  assert.equal(env.format, 'kunji-data');
+  assert.equal(env.v, 1);
+  assert.equal(env.kdf, `pbkdf2-sha512-${PBKDF2_ITERATIONS}`);
+  assert.equal(env.identityHint, null);
+  assert.equal(env.kcv, await computeKcv(MK));
+  assert.equal(b64(env.iv).length, 12);
+  assert.ok(b64(env.ct).length > 16);
+  assert.equal(b64(env.decoy.kcv).length, 4);
+  assert.equal(b64(env.decoy.iv).length, 12);
+  assert.equal(b64(env.decoy.ct).length, b64(env.ct).length, 'decoy ct matches real ct length');
+  assert.equal(env.revision, 42);
+  assert.equal(env.lastWriter, 'w-1');
+  assert.match(env.updatedAt, /^\d{4}-\d\d-\d\dT/);
+  assert.ok(text.endsWith('\n'));
+});
+
+test('encodeEnvelope writes identityHint only when given', async () => {
+  const v = createVault();
+  const withHint = JSON.parse(await encodeEnvelope(v, { masterKey: MK, identityHint: 'me@x.com', writerId: 'w' }));
+  assert.equal(withHint.identityHint, 'me@x.com');
+});
+
+test('encodeEnvelope uses a fresh IV each call', async () => {
+  const v = createVault();
+  const a = JSON.parse(await encodeEnvelope(v, { masterKey: MK, writerId: 'w' }));
+  const b = JSON.parse(await encodeEnvelope(v, { masterKey: MK, writerId: 'w' }));
+  assert.notEqual(a.iv, b.iv);
+  assert.notEqual(a.ct, b.ct);
+});
+
+test('encodeEnvelope defaults prevRevision to 0 -> revision 1', async () => {
+  const env = JSON.parse(await encodeEnvelope(createVault(), { masterKey: MK, writerId: 'w' }));
+  assert.equal(env.revision, 1);
+});

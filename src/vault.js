@@ -1,4 +1,6 @@
 import { utf8, bytesToBase64 } from './encoding.js';
+import { aesGcmEncrypt } from './webcrypto.js';
+import { deriveVaultKey, computeKcv, PBKDF2_ITERATIONS } from './derive.js';
 
 export const VAULT_FORMAT = 'kunji-data';
 export const VAULT_V = 1;
@@ -84,4 +86,25 @@ export function updateEntry(vault, id, patch) {
 
 export function removeEntry(vault, id) {
   return { ...vault, entries: vault.entries.filter((e) => e.id !== id) };
+}
+
+export async function encodeEnvelope(vault, { masterKey, identityHint = null, prevRevision = 0, writerId }) {
+  const plainBytes = utf8(JSON.stringify({ entries: vault.entries, settings: vault.settings }));
+  const vaultKey = await deriveVaultKey(masterKey);
+  const iv = randomBytes(12);
+  const ct = await aesGcmEncrypt(vaultKey, iv, plainBytes, VAULT_AAD);
+  const envelope = {
+    format: VAULT_FORMAT,
+    v: VAULT_V,
+    kdf: `pbkdf2-sha512-${PBKDF2_ITERATIONS}`,
+    identityHint: identityHint || null,
+    kcv: await computeKcv(masterKey),
+    iv: bytesToBase64(iv),
+    ct: bytesToBase64(ct),
+    decoy: newDecoyBytes(ct.length),
+    revision: prevRevision + 1,
+    lastWriter: writerId,
+    updatedAt: new Date().toISOString(),
+  };
+  return JSON.stringify(envelope, null, 2) + '\n';
 }
