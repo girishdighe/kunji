@@ -1,0 +1,27 @@
+<div id="swUpdateBar" hidden style="position:fixed;left:0;right:0;bottom:0;background:#16181C;border-top:1px solid #2F3336;color:#E7E9EA;font:600 13px -apple-system,BlinkMacSystemFont,sans-serif;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;z-index:9999">
+  <span>New version available</span>
+  <button id="swReload" type="button" style="background:#1D9BF0;border:none;color:#fff;border-radius:9999px;padding:8px 16px;font:inherit;cursor:pointer">Reload</button>
+</div>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').then(function (reg) {
+    reg.addEventListener('updatefound', function () {
+      var w = reg.installing;
+      if (!w) return;
+      w.addEventListener('statechange', function () {
+        if (w.state === 'installed' && navigator.serviceWorker.controller) {
+          var bar = document.getElementById('swUpdateBar');
+          bar.hidden = false;
+          document.getElementById('swReload').addEventListener('click', function () {
+            w.postMessage({ type: 'SKIP_WAITING' });
+          });
+        }
+      });
+    });
+  });
+  var reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (reloaded) return; reloaded = true; location.reload();
+  });
+}
+</script>
