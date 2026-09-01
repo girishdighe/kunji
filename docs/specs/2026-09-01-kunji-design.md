@@ -114,6 +114,10 @@ visible. UI shows a non-blocking hint.
 - `max-symbols`:
   `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!#$%&*()-_=+[]{};:,.?@`
 
+These three sets are final for v1. `max-symbols` deliberately includes brackets
+and punctuation that some sites reject; that is the point of the preset, and
+`standard` is the safe default.
+
 Required character classes:
 
 - `standard`: >= 1 lowercase, >= 1 uppercase, >= 1 digit, >= 1 symbol.
@@ -127,9 +131,10 @@ Required character classes:
 salt = utf8(normalised identity), iterations = 600000, dkLen = 32)`
 
 v1 KDF is PBKDF2-HMAC-SHA512 because it is native in Web Crypto on every target
-platform, so v1 ships with zero hand-written crypto. A future `v2` profile
-replaces Step 1 with our own Argon2id (RFC 9106), test-vector verified, cost
-parameters frozen at that time.
+platform, so v1 ships with zero hand-written crypto. The PBKDF2 iteration count
+for v1 is frozen at 600000 (see the `PROFILES` registry in `src/derive.js`). A
+future `v2` profile registers its own KDF — contract in
+`docs/specs/2026-09-01-kunji-v2-profile-requirements.md`.
 
 **Step 2: entry seed.**
 `entrySeed = HKDF(hash = SHA-256, ikm = masterKey, salt = utf8("kunji/v1"),
@@ -505,12 +510,8 @@ a later enhancement where the platform supports the PRF extension. Not in v1.
 
 ## 13. Open decisions
 
-- **v1 KDF cost.** PBKDF2-SHA512 at 600000 iterations is the starting figure.
-  Confirm against real timing on the slowest target device (an older Android
-  tablet) and adjust before freezing v1. Target 0.5..1.5s.
-- **`max-symbols` character set.** The listed set includes brackets and
-  punctuation some sites reject. Confirm the set before freezing, or add a
-  fourth, wider preset.
+- **Resolved in Phase 5a.** PBKDF2-600000 and the three character sets are frozen
+  as v1. Future cost/primitive changes ship as a new profile.
 - **Shared family master.** Decide which specific accounts go in the shared vault
   vs each person's personal vault.
 - **`identityHint` default.** Off (nothing stored) vs on (prefill convenience).

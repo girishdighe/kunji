@@ -3,7 +3,9 @@ import { pbkdf2Sha512, hkdfSha256, hmacSha256 } from './webcrypto.js';
 
 export const PROFILE = 'v1';
 
-// OPEN DECISION (spec s13): confirm on the slowest target device before freezing v1.
+// FROZEN as part of the v1 profile. Never change in place — a different cost is
+// a different profile (see PROFILES and
+// docs/specs/2026-09-01-kunji-v2-profile-requirements.md).
 export const PBKDF2_ITERATIONS = 600000;
 
 // --- Profile registry -----------------------------------------------------
@@ -35,6 +37,9 @@ export const MIN_LENGTH = 8;
 export const MAX_LENGTH = 64;
 export const DEFAULT_RULES = 'standard';
 
+// FROZEN for v1. `max-symbols` deliberately includes brackets and punctuation
+// that some sites reject — that is the point of the preset; `standard` is the
+// safe default.
 export const CHARSETS = {
   'standard':
     'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!#$%&*+-=?@_',
