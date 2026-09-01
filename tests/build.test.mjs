@@ -39,6 +39,14 @@ test('built html inlines vault-bridge, ordered after vault.js and before app.js'
   assert.ok(html.indexOf('src/vault-bridge.js') < html.indexOf('src/app.js'), 'before app.js');
 });
 
+test('built html inlines src/totp.js after webcrypto.js and before vault.js', () => {
+  execFileSync('node', ['tools/build.mjs'], { stdio: 'pipe' });
+  const html = readFileSync('dist/kunji.html', 'utf8');
+  assert.ok(html.includes('==== src/totp.js ===='), 'totp.js concatenated');
+  assert.ok(html.indexOf('src/webcrypto.js') < html.indexOf('src/totp.js'));
+  assert.ok(html.indexOf('src/totp.js') < html.indexOf('src/vault.js'));
+});
+
 test('built html inlines the qr modules after encoding.js and before vault.js', () => {
   execFileSync('node', ['tools/build.mjs'], { stdio: 'pipe' });
   const html = readFileSync('dist/kunji.html', 'utf8');
