@@ -285,3 +285,27 @@ test('derivePassword always contains every required class (B1 regression)', asyn
     }
   }
 });
+
+import { deriveVaultKey } from '../src/derive.js';
+
+test('deriveVaultKey is HKDF-SHA256(masterKey, "kunji/v1", "vault-key", 32)', async () => {
+  const fromApi = await deriveVaultKey(FIXED_MK);
+  const { hkdfSha256 } = await import('../src/webcrypto.js');
+  const { utf8 } = await import('../src/encoding.js');
+  const manual = await hkdfSha256(FIXED_MK, utf8('kunji/v1'), utf8('vault-key'), 32);
+  assert.equal(bytesToHex(fromApi), bytesToHex(manual));
+  assert.equal(fromApi.length, 32);
+});
+
+test('deriveVaultKey is deterministic and differs from the master key', async () => {
+  const a = await deriveVaultKey(FIXED_MK);
+  const b = await deriveVaultKey(FIXED_MK);
+  assert.equal(bytesToHex(a), bytesToHex(b));
+  assert.notEqual(bytesToHex(a), bytesToHex(FIXED_MK));
+});
+
+test('deriveVaultKey frozen vector', async () => {
+  // Frozen v1 value. If this changes, every existing vault file stops decrypting.
+  const vk = await deriveVaultKey(FIXED_MK);
+  assert.equal(bytesToHex(vk), '8ef1c3640682b7a78ba8847a094450389fbcad5e80f78d26823cdd9927d0c1cb');
+});

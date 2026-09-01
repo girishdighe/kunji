@@ -80,6 +80,10 @@ export async function deriveEntrySeed(masterKey, { site, account, counter, rules
   return hkdfSha256(masterKey, utf8('kunji/v1'), info, 64);
 }
 
+export async function deriveVaultKey(masterKey) {
+  return hkdfSha256(masterKey, utf8('kunji/v1'), utf8('vault-key'), 32);
+}
+
 export async function generateChars(entrySeed, charset, length) {
   const keystream = makeKeystream(entrySeed, 'gen');
   const n = charset.length;
