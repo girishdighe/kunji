@@ -261,10 +261,13 @@ function initVaultTab() {
   }
 
   // ---- LOCKED / UNLOCKED: filled in Tasks 10-13 ----
-  function renderLocked() {
+  async function renderLocked() {
     const hint = typeof loadedEnvelope.identityHint === 'string' ? esc(loadedEnvelope.identityHint) : '';
+    const pkKcv = loadedEnvelope ? loadedEnvelope.kcv : null;
+    const passkeyRecord = pkKcv ? loadPasskey(pkKcv) : null;
     panel.innerHTML = `
       <div class="v-loaded">Vault file loaded.</div>
+      ${passkeyRecord ? '<button class="btn-primary" id="vlPasskey" type="button">Unlock with passkey</button><div class="v-or">or use your passphrase</div>' : ''}
       <div class="fields">
         <div class="field"><input id="vlIdentity" type="text" autocomplete="off" spellcheck="false" placeholder=" " value="${hint}"><label for="vlIdentity">Identity</label></div>
         <div class="field"><input id="vlPass" type="password" autocomplete="off" spellcheck="false" placeholder=" "><label for="vlPass">Master passphrase</label></div>
@@ -315,6 +318,40 @@ function initVaultTab() {
       if (dirty && !confirm('Discard unsaved changes and open a different file?')) return;
       loadedEnvelope = null; wipe(); state = 'NO_VAULT'; render();
     });
+
+    if (passkeyRecord) {
+      const pkBtn = panel.querySelector('#vlPasskey');
+      if (!(await isPasskeySupported())) {
+        pkBtn.disabled = true;
+        pkBtn.textContent = 'Passkey needs the installed app';
+      } else {
+        pkBtn.addEventListener('click', async () => {
+          const errEl = panel.querySelector('#vlError');
+          errEl.textContent = '';
+          pkBtn.disabled = true; pkBtn.textContent = 'Waiting for passkey…';
+          try {
+            const secret = await getPasskeySecret(
+              base64ToBytes(passkeyRecord.credentialId), base64ToBytes(passkeyRecord.prfSalt));
+            const mk = await unwrapMasterKey(
+              { iv: base64ToBytes(passkeyRecord.iv), ct: base64ToBytes(passkeyRecord.ct) }, secret);
+            if (await computeKcv(mk) !== loadedEnvelope.kcv) throw new Error('kcv mismatch');
+            const opened = await openVault(loadedEnvelope, { masterKey: mk });
+            masterKey = mk;
+            vault = { entries: opened.entries, settings: opened.settings };
+            sessionIdentity = panel.querySelector('#vlIdentity') ? panel.querySelector('#vlIdentity').value.trim() || sessionIdentity : sessionIdentity;
+            identityHintOn = typeof loadedEnvelope.identityHint === 'string';
+            unlockedSlot = opened.slot; activeSlot = 'real';
+            decoyVault = null; decoyMasterKey = null; realVault = null; realMasterKey = null;
+            dirty = false; state = 'UNLOCKED';
+            vaultBridge.publish(visibleEntries(vault));
+            render();
+          } catch (e) {
+            errEl.textContent = 'Passkey unlock failed — use your passphrase.';
+            pkBtn.disabled = false; pkBtn.textContent = 'Unlock with passkey';
+          }
+        });
+      }
+    }
 
     panel.querySelector('#vlUnlock').addEventListener('click', async () => {
       const errEl = panel.querySelector('#vlError');
@@ -519,6 +556,14 @@ function initVaultTab() {
             ? '<button class="link-btn" id="vDecoyChange" type="button">Change decoy passphrase</button> &middot; <button class="link-btn v-danger" id="vDecoyRemove" type="button">Remove decoy</button>'
             : '<button class="link-btn" id="vDecoySetup" type="button">Set up decoy&hellip;</button>'}
           <div class="error" id="vDecoyError"></div>
+        </div>
+        <div class="v-passkey-row">
+          ${!loadedEnvelope
+            ? '<span class="v-foot">Save the vault to enable passkey unlock.</span>'
+            : (hasPasskey(loadedEnvelope.kcv)
+              ? '<button class="link-btn" id="vPkRemove" type="button">Remove passkey (this device)</button>'
+              : '<button class="link-btn" id="vPkAdd" type="button">Set up passkey on this device&hellip;</button>')}
+          <div class="error" id="vPkError"></div>
         </div>` : ''}
       <div class="error" id="vListError"></div>
     `;
@@ -558,6 +603,34 @@ function initVaultTab() {
       decoyVault = null; decoyMasterKey = null;
       if (activeSlot === 'decoy') { activeSlot = 'real'; vault = realVault; masterKey = realMasterKey; }
       markDirty(); render();
+    });
+    if (panel.querySelector('#vPkAdd')) panel.querySelector('#vPkAdd').addEventListener('click', async () => {
+      const err = panel.querySelector('#vPkError'); err.textContent = '';
+      if (!(await isPasskeySupported())) { err.textContent = 'Passkeys need the installed app (open Kunji from your home screen).'; return; }
+      if (!confirm('Register a passkey so this device can unlock this vault with your fingerprint / PIN instead of the passphrase?')) return;
+      try {
+        const { credentialId } = await registerPasskey({ userName: sessionIdentity || 'vault' });
+        const prfSalt = crypto.getRandomValues(new Uint8Array(32));
+        const secret = await getPasskeySecret(credentialId, prfSalt);
+        const wrapped = await wrapMasterKey(masterKey, secret);
+        savePasskey(loadedEnvelope.kcv, {
+          v: 1,
+          credentialId: bytesToBase64(credentialId),
+          prfSalt: bytesToBase64(prfSalt),
+          iv: bytesToBase64(wrapped.iv),
+          ct: bytesToBase64(wrapped.ct),
+          label: 'this device',
+          createdAt: new Date().toISOString(),
+        });
+        render();
+      } catch (e) {
+        err.textContent = 'Could not set up the passkey.';
+      }
+    });
+    if (panel.querySelector('#vPkRemove')) panel.querySelector('#vPkRemove').addEventListener('click', () => {
+      if (!confirm('Forget the passkey for this vault on this device? (The platform credential must be deleted in your OS settings separately.)')) return;
+      removePasskey(loadedEnvelope.kcv);
+      render();
     });
   }
 
