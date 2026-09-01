@@ -18,6 +18,7 @@ const JS_ORDER = [
   'src/vault-bridge.js',
   'src/app.js',
   'src/vault-ui.js',
+  'src/readout.js',
 ];
 
 function stripModuleSyntax(js) {

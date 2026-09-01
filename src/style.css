@@ -29,9 +29,17 @@ body {
   border-radius: 16px;
   padding: 32px;
 }
-header { margin-bottom: 28px; }
+header { position: relative; margin-bottom: 28px; }
 .title { font-size: 23px; font-weight: 800; letter-spacing: -0.01em; }
-.subtitle { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.wordmark { display: block; height: 23px; width: auto; color: var(--text); }
+.subtitle { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.readout {
+  position: absolute;
+  top: 1px;
+  right: 0;
+  width: 120px;
+  height: 44px;
+}
 .fields { display: flex; flex-direction: column; gap: 16px; }
 .field { position: relative; }
 .field input, .field select {

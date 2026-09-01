@@ -1,0 +1,749 @@
+<title>Kunji Readout Studies</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=Figtree:wght@400;600;800&family=Onest:wght@400;600;800&family=Albert+Sans:wght@400;600;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    color-scheme: dark;
+    --bg:#0a0a0b;
+    --panel:#111114;
+    --panel-2:#17171b;
+    --line:#26262c;
+    --line-2:#34343c;
+    --ink:#e7e9ea;        /* X primary text */
+    --ink-dim:#8b8f96;    /* cool grey secondary */
+    --ink-faint:#5c6067;
+    --accent:#1d9bf0;     /* X blue — active controls only */
+    --radius:14px;
+    --wm: 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
+    --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  *{ box-sizing:border-box; }
+  html{ -webkit-text-size-adjust:100%; }
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font:400 15px/1.6 var(--wm);
+    letter-spacing:-0.005em;
+  }
+  .wrap{ max-width:1080px; margin:0 auto; padding:56px 24px 96px; }
+
+  header.page{ margin-bottom:44px; }
+  .kicker{
+    font:600 12px/1 var(--mono);
+    letter-spacing:0.22em;
+    text-transform:uppercase;
+    color:var(--accent);
+    margin:0 0 14px;
+  }
+  h1{
+    margin:0 0 12px;
+    font-weight:800;
+    font-size:clamp(28px, 4.4vw, 40px);
+    letter-spacing:-0.028em;
+    line-height:1.05;
+    text-wrap:balance;
+  }
+  header.page p{
+    margin:0;
+    max-width:60ch;
+    color:var(--ink-dim);
+    font-size:15px;
+  }
+
+  section{ margin-top:64px; }
+  h2{
+    margin:0 0 6px;
+    font:600 12px/1 var(--mono);
+    letter-spacing:0.18em;
+    text-transform:uppercase;
+    color:var(--ink-dim);
+  }
+  .lede{ margin:0 0 26px; max-width:66ch; color:var(--ink-dim); font-size:14px; }
+  .lede code{ font:500 12.5px/1 var(--mono); color:var(--ink); background:var(--panel-2); padding:2px 6px; border-radius:5px; }
+
+  /* ---- context mock: Kunji header as it would actually look ---- */
+  .mock{
+    position:relative;
+    background:#000;
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:26px 28px 30px;
+    min-height:150px;
+    overflow:hidden;
+  }
+  .mock .wm{
+    font-family:var(--wm);
+    font-weight:800;
+    font-size:30px;
+    letter-spacing:-0.03em;
+    color:var(--ink);
+  }
+  .mock .sub{
+    margin-top:6px;
+    color:var(--ink-dim);
+    font-size:13px;
+  }
+  .mock .slot{
+    position:absolute;
+    top:22px;
+    right:24px;
+    width:154px;
+    height:64px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    overflow:hidden;
+  }
+  .mock .slot canvas{ display:block; width:100%; height:100%; background:#050806; }
+
+  /* ---- controls ---- */
+  .controls{
+    display:flex;
+    flex-wrap:wrap;
+    gap:22px 36px;
+    align-items:center;
+    margin-top:22px;
+    padding:16px 18px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+  }
+  .ctl-group{ display:flex; align-items:center; gap:10px; }
+  .ctl-group > span{
+    font:600 11px/1 var(--mono);
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--ink-faint);
+  }
+  .btn{
+    appearance:none;
+    font:600 12px/1 var(--wm);
+    color:var(--ink-dim);
+    background:var(--panel-2);
+    border:1px solid var(--line-2);
+    border-radius:999px;
+    padding:7px 14px;
+    cursor:pointer;
+    transition:color .12s ease, border-color .12s ease, background .12s ease;
+  }
+  .btn:hover{ color:var(--ink); }
+  .btn[aria-pressed="true"]{
+    color:#fff;
+    border-color:var(--accent);
+    background:rgba(29,155,240,0.14);
+  }
+  .hint{ font-size:12px; color:var(--ink-faint); }
+
+  /* ---- wordmark studies ---- */
+  .type-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(230px, 1fr));
+    gap:16px;
+  }
+  .type-card{
+    background:#000;
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:26px 22px 18px;
+  }
+  .type-card.pick{ border-color:var(--accent); }
+  .type-card .sample{
+    font-weight:800;
+    font-size:38px;
+    letter-spacing:-0.03em;
+    color:var(--ink);
+    line-height:1;
+  }
+  .type-card .meta{
+    margin-top:18px;
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:12px;
+  }
+  .type-card .name{ font:600 12px/1 var(--mono); letter-spacing:0.04em; color:var(--ink); }
+  .type-card .tag{
+    font:600 10px/1 var(--mono);
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--accent);
+  }
+  .type-card .why{ margin-top:8px; font-size:12.5px; color:var(--ink-dim); }
+
+  /* ---- readout gallery ---- */
+  .gallery{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(248px, 1fr));
+    gap:18px;
+  }
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    overflow:hidden;
+  }
+  .card .bar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    padding:11px 13px;
+  }
+  .card .bar .label{ font:600 12.5px/1 var(--wm); color:var(--ink); }
+  .card .use{
+    appearance:none;
+    font:600 11px/1 var(--mono);
+    letter-spacing:0.06em;
+    color:var(--ink-dim);
+    background:transparent;
+    border:1px solid var(--line-2);
+    border-radius:6px;
+    padding:5px 9px;
+    cursor:pointer;
+  }
+  .card .use:hover{ color:var(--ink); border-color:var(--ink-faint); }
+  .card .use[aria-pressed="true"]{ color:#fff; border-color:var(--accent); background:rgba(29,155,240,0.14); }
+  .screen{
+    position:relative;
+    border-top:1px solid var(--line);
+    border-bottom:1px solid var(--line);
+  }
+  .screen canvas{ display:block; width:100%; height:120px; background:#050806; }
+  /* deliberate CRT scanline — the brief is "retro"; kept faint */
+  .screen::after{
+    content:"";
+    position:absolute; inset:0;
+    pointer-events:none;
+    background:repeating-linear-gradient(180deg, rgba(0,0,0,0) 0 2px, rgba(0,0,0,0.16) 2px 3px);
+    mix-blend-mode:multiply;
+  }
+  .card .note{ padding:11px 13px 13px; font-size:12.5px; color:var(--ink-dim); }
+
+  footer{
+    margin-top:72px;
+    padding-top:22px;
+    border-top:1px solid var(--line);
+    font-size:13px;
+    color:var(--ink-dim);
+    max-width:70ch;
+  }
+  footer code{ font:500 12px/1 var(--mono); color:var(--ink); background:var(--panel-2); padding:2px 6px; border-radius:5px; }
+  footer b{ color:var(--ink); font-weight:600; }
+
+  :focus-visible{ outline:2px solid var(--accent); outline-offset:2px; border-radius:4px; }
+
+  @media (prefers-reduced-motion: reduce){
+    .reduced-note{ display:block; }
+  }
+  .reduced-note{ display:none; margin-top:10px; font-size:12px; color:var(--ink-faint); }
+</style>
+
+<div class="wrap">
+  <header class="page">
+    <p class="kicker">Kunji &middot; identity + corner readout</p>
+    <h1>A wordmark that borrows Chirp&rsquo;s bones, and a little machine for the top-right corner.</h1>
+    <p>Chirp is X&rsquo;s in-house typeface and isn&rsquo;t licensed for redistribution, so the wordmark below is set in the closest freely-licensed grotesques &mdash; same tall x-height, same tight fit. The readout is a small animated display that sits where the empty space is now, cycling through states that mean something in Kunji: a keystream, the cipher block, the live TOTP window.</p>
+  </header>
+
+  <section aria-labelledby="mock-h">
+    <h2 id="mock-h">In context</h2>
+    <p class="lede">The real Kunji header, mocked. Pick a face for the wordmark and a readout for the corner &mdash; the panel updates live.</p>
+    <div class="mock">
+      <div class="wm" id="mockWm">Kunji</div>
+      <div class="sub">Offline. Nothing is stored or sent.</div>
+      <div class="slot"><canvas id="mockCanvas" width="308" height="128" aria-hidden="true"></canvas></div>
+    </div>
+    <div class="controls">
+      <div class="ctl-group" role="group" aria-label="Wordmark face">
+        <span>Face</span>
+        <button class="btn" data-font="'Hanken Grotesk', sans-serif" aria-pressed="true">Hanken</button>
+        <button class="btn" data-font="'Figtree', sans-serif" aria-pressed="false">Figtree</button>
+        <button class="btn" data-font="'Onest', sans-serif" aria-pressed="false">Onest</button>
+        <button class="btn" data-font="'Albert Sans', sans-serif" aria-pressed="false">Albert</button>
+      </div>
+      <div class="ctl-group" role="group" aria-label="Readout colour">
+        <span>Phosphor</span>
+        <button class="btn" data-scheme="phosphor" aria-pressed="true">Green</button>
+        <button class="btn" data-scheme="amber" aria-pressed="false">Amber</button>
+        <button class="btn" data-scheme="white" aria-pressed="false">White</button>
+      </div>
+      <span class="hint">Motion pauses automatically under <code style="font:inherit">prefers-reduced-motion</code>.</span>
+    </div>
+    <p class="reduced-note">Reduced-motion is on in your system, so each readout is drawn as a single still frame.</p>
+  </section>
+
+  <section aria-labelledby="wm-h">
+    <h2 id="wm-h">Wordmark &mdash; Chirp substitutes</h2>
+    <p class="lede">All four are open-licensed and Chirp-adjacent. <code>Hanken Grotesk</code> is the recommendation: its x-height and letter-fit track Chirp most closely at wordmark size, and the <b>K</b>/<b>j</b> shapes hold up when set tight.</p>
+    <div class="type-grid" id="typeGrid"></div>
+  </section>
+
+  <section aria-labelledby="gal-h">
+    <h2 id="gal-h">Corner readout &mdash; eight studies</h2>
+    <p class="lede">Each is self-contained: one <code>&lt;canvas&gt;</code>, a few dozen lines of JS, no network, no assets &mdash; so any of them drops straight into the single-file build. Hit <b>Use</b> to load one into the mock above.</p>
+    <div class="gallery" id="gallery"></div>
+  </section>
+
+  <footer>
+    <p>Wiring the chosen one into <code>dist/kunji.html</code>: it&rsquo;s an inline <code>&lt;canvas&gt;</code> plus a <code>requestAnimationFrame</code> loop &mdash; no fetch, no external font, no storage &mdash; so it clears the CSP and the no-network invariant scan untouched. The 7-segment <b>TOTP countdown</b> reads real wall-clock time and lines up with Kunji&rsquo;s live TOTP tab; the rest are decorative but honest about what they depict.</p>
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var PRM = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---------- colour schemes ---------- */
+  var SCHEMES = {
+    phosphor:{ fg:'#33ff88', dim:'#0f6b3c', glow:'#33ff88', bg:'#050806' },
+    amber:   { fg:'#ffb000', dim:'#7a4d00', glow:'#ffb000', bg:'#080602' },
+    white:   { fg:'#f2f4f5', dim:'#3b3e42', glow:'#cfe3ff', bg:'#050506' }
+  };
+  var SCHEME = 'phosphor';
+  function col(){ return SCHEMES[SCHEME]; }
+
+  var HEX = '0123456789ABCDEF';
+  function bhex(v){ return HEX[(v>>4)&15] + HEX[v&15]; }
+  function rb(){ return (Math.random()*256)|0; }
+
+  /* ---------- 5x7 LED font (only the glyphs the marquee needs) ---------- */
+  var F = {
+    ' ':['00000','00000','00000','00000','00000','00000','00000'],
+    '.':['00000','00000','00000','00000','00000','01100','01100'],
+    'K':['10001','10010','10100','11000','10100','10010','10001'],
+    'U':['10001','10001','10001','10001','10001','10001','01110'],
+    'N':['10001','11001','11001','10101','10011','10011','10001'],
+    'J':['00111','00010','00010','00010','10010','10010','01100'],
+    'I':['01110','00100','00100','00100','00100','00100','01110'],
+    'O':['01110','10001','10001','10001','10001','10001','01110'],
+    'F':['11111','10000','10000','11110','10000','10000','10000'],
+    'L':['10000','10000','10000','10000','10000','10000','11111'],
+    'E':['11111','10000','10000','11110','10000','10000','11111'],
+    'T':['11111','00100','00100','00100','00100','00100','00100'],
+    'H':['10001','10001','10001','11111','10001','10001','10001'],
+    'G':['01110','10001','10000','10111','10001','10001','01111'],
+    'S':['01111','10000','10000','01110','00001','00001','11110'],
+    'D':['11110','10001','10001','10001','10001','10001','11110'],
+    'R':['11110','10001','10001','11110','10100','10010','10001'],
+    'V':['10001','10001','10001','10001','10001','01010','00100'],
+    'C':['01111','10000','10000','10000','10000','10000','01111'],
+    'P':['11110','10001','10001','11110','10000','10000','10000'],
+    'Y':['10001','10001','01010','00100','00100','00100','00100'],
+    '1':['00100','01100','00100','00100','00100','00100','01110']
+  };
+  function buildCols(str){
+    var cols = [];
+    for(var i=0;i<str.length;i++){
+      var g = F[str[i]] || F[' '];
+      for(var cx=0;cx<5;cx++){
+        var c = [];
+        for(var ry=0;ry<7;ry++) c.push(g[ry][cx]==='1'?1:0);
+        cols.push(c);
+      }
+      cols.push([0,0,0,0,0,0,0]);
+    }
+    return cols;
+  }
+
+  /* ---------- shared canvas fit ---------- */
+  function fit(cv){
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var r = cv.getBoundingClientRect();
+    var w = Math.max(1, r.width), h = Math.max(1, r.height);
+    cv.width = Math.round(w * dpr);
+    cv.height = Math.round(h * dpr);
+    var ctx = cv.getContext('2d');
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    return { ctx:ctx, w:w, h:h };
+  }
+  function clearSolid(ctx,w,h){ var c=col(); ctx.fillStyle=c.bg; ctx.fillRect(0,0,w,h); }
+  function fade(ctx,w,h,a){ var c=col(); ctx.globalAlpha=a; ctx.fillStyle=c.bg; ctx.fillRect(0,0,w,h); ctx.globalAlpha=1; }
+
+  /* ================= displays ================= */
+
+  function makeTicker(){
+    var cols = buildCols('KUNJI . OFFLINE . NOTHING STORED OR SENT . V1 . ');
+    return { draw:function(ctx,w,h,t){
+      clearSolid(ctx,w,h);
+      var c = col();
+      var pitch = Math.max(3, Math.floor((h - 6) / 7));
+      var r = pitch * 0.34;
+      var top = (h - pitch*7) / 2 + pitch/2;
+      var speed = 34;
+      var scroll = (t * speed);
+      var vis = Math.ceil(w / pitch) + 1;
+      var off = scroll % 1;
+      for(var i=0;i<vis;i++){
+        var mi = ((Math.floor(scroll) + i) % cols.length + cols.length) % cols.length;
+        var pat = cols[mi];
+        var x = i*pitch - off*pitch + pitch/2;
+        for(var ry=0;ry<7;ry++){
+          var on = pat[ry] === 1;
+          ctx.beginPath();
+          ctx.arc(x, top + ry*pitch, r, 0, 6.2832);
+          if(on){ ctx.fillStyle = c.fg; ctx.shadowColor = c.glow; ctx.shadowBlur = 6; }
+          else { ctx.fillStyle = c.dim; ctx.shadowBlur = 0; ctx.globalAlpha = 0.30; }
+          ctx.fill();
+          ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+        }
+      }
+    }};
+  }
+
+  function makeEntropy(){
+    var lines = [], cur = '', acc = 0;
+    return { start:function(){ lines=[]; cur=''; acc=0; },
+      draw:function(ctx,w,h,t,dt){
+        clearSolid(ctx,w,h);
+        var c = col();
+        ctx.font = "500 11px 'IBM Plex Mono', monospace";
+        ctx.textBaseline = 'top';
+        var lh = 14;
+        var perLine = Math.max(4, Math.floor((w - 12) / 6.9));
+        var rows = Math.max(2, Math.floor((h - 6) / lh));
+        acc += (dt || 0.016);
+        while(acc > 0.045){
+          acc -= 0.045;
+          cur += bhex(rb());
+          if(cur.length >= perLine){
+            lines.push(cur); cur = '';
+            if(lines.length > rows) lines.shift();
+          }
+        }
+        for(var i=0;i<lines.length;i++){
+          ctx.globalAlpha = 0.42 + 0.5 * (i/(rows));
+          ctx.fillStyle = c.fg;
+          ctx.fillText(lines[i], 6, 4 + i*lh);
+        }
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = c.fg; ctx.shadowColor = c.glow; ctx.shadowBlur = 6;
+        var y = 4 + Math.min(lines.length, rows) * lh;
+        ctx.fillText(cur, 6, y);
+        if(Math.floor(t*2) % 2 === 0){
+          ctx.fillRect(6 + cur.length*6.9, y, 6, 11);
+        }
+        ctx.shadowBlur = 0;
+      }};
+  }
+
+  function makeFlap(){
+    var words = ['KUNJI ','LOCKED','SEALED','HIDDEN','VAULT '];
+    var n = 6, cells = [], wi = 0, nextAt = 0;
+    for(var i=0;i<n;i++) cells.push({ shown:words[0][i], target:words[0][i], until:0 });
+    function rc(){ return HEX[(Math.random()*16)|0]; }
+    return { draw:function(ctx,w,h,t){
+      clearSolid(ctx,w,h);
+      var c = col();
+      if(t > nextAt){
+        nextAt = t + 3.4;
+        wi = (wi + 1) % words.length;
+        for(var i=0;i<n;i++){
+          var ch = words[wi][i] || ' ';
+          if(ch !== cells[i].shown){ cells[i].target = ch; cells[i].until = t + 0.35 + i*0.14; }
+        }
+      }
+      var pad = 6, gap = 4;
+      var cw = (w - pad*2 - gap*(n-1)) / n;
+      var ch = Math.min(h - 12, cw * 1.5);
+      var y0 = (h - ch) / 2;
+      ctx.font = "700 " + Math.floor(ch*0.62) + "px 'IBM Plex Mono', monospace";
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      for(var i=0;i<n;i++){
+        var x = pad + i*(cw+gap);
+        var spinning = t < cells[i].until;
+        var glyph = spinning ? rc() : (cells[i].shown = cells[i].target);
+        ctx.fillStyle = '#0c0f0d';
+        rr(ctx, x, y0, cw, ch, 3); ctx.fill();
+        ctx.strokeStyle = c.dim; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, y0 + ch/2); ctx.lineTo(x + cw, y0 + ch/2); ctx.stroke();
+        ctx.save();
+        ctx.translate(x + cw/2, y0 + ch/2);
+        if(spinning){ ctx.scale(1, Math.abs(Math.cos((cells[i].until - t) * 26))); }
+        ctx.fillStyle = c.fg;
+        if(!spinning){ ctx.shadowColor = c.glow; ctx.shadowBlur = 5; }
+        ctx.fillText(glyph, 0, 1);
+        ctx.restore();
+        ctx.shadowBlur = 0;
+      }
+      ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+    }};
+  }
+
+  function makeAES(){
+    var g = [], heat = [], evAt = 0;
+    for(var i=0;i<16;i++){ g.push(rb()); heat.push(0); }
+    return { draw:function(ctx,w,h,t,dt){
+      clearSolid(ctx,w,h);
+      var c = col(); dt = dt || 0.016;
+      for(var i=0;i<16;i++){
+        if(Math.random() < 0.55 * dt){ g[i] = rb(); heat[i] = 1; }
+        heat[i] = Math.max(0, heat[i] - dt*1.8);
+      }
+      if(t > evAt){
+        evAt = t + 2.1;
+        for(var k=0;k<6;k++){ var j = (Math.random()*16)|0; g[j] = rb(); heat[j] = 1; }
+      }
+      var cw = w/4, chh = h/4;
+      ctx.font = "500 " + Math.floor(Math.min(cw,chh)*0.46) + "px 'IBM Plex Mono', monospace";
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      for(var r=0;r<4;r++) for(var cc=0;cc<4;cc++){
+        var idx = r*4 + cc, hh = heat[idx];
+        ctx.globalAlpha = 0.4 + 0.6*hh;
+        ctx.fillStyle = c.fg;
+        if(hh > 0.05){ ctx.shadowColor = c.glow; ctx.shadowBlur = 6; }
+        ctx.fillText(bhex(g[idx]), cc*cw + cw/2, r*chh + chh/2);
+        ctx.shadowBlur = 0;
+      }
+      ctx.globalAlpha = 1;
+      ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+    }};
+  }
+
+  function makeScope(){
+    var seed = Math.random()*10;
+    return { draw:function(ctx,w,h,t){
+      fade(ctx,w,h,0.20);
+      var c = col();
+      ctx.strokeStyle = c.dim; ctx.globalAlpha = 0.5; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(0, h/2); ctx.lineTo(w, h/2); ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.beginPath();
+      for(var x=0;x<=w;x+=2){
+        var n = Math.sin(x*0.055 + t*4 + seed) + 0.34*Math.sin(x*0.17 - t*6);
+        var y = h/2 + (h*0.30) * (n/1.34) + (Math.random()-0.5)*4;
+        if(x===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      ctx.strokeStyle = c.fg; ctx.lineWidth = 1.6;
+      ctx.shadowColor = c.glow; ctx.shadowBlur = 8;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }};
+  }
+
+  function makeRain(){
+    var drops = null, cw = 9;
+    return {
+      start:function(w,h){ var n = Math.max(1, Math.floor(w/cw)); drops = [];
+        for(var i=0;i<n;i++) drops.push({ y: Math.random()*h, s: 40 + Math.random()*80 }); },
+      draw:function(ctx,w,h,t,dt){
+        fade(ctx,w,h,0.26);
+        var c = col(); dt = dt || 0.016;
+        ctx.font = "500 11px 'IBM Plex Mono', monospace";
+        ctx.textBaseline = 'top';
+        for(var i=0;i<drops.length;i++){
+          var d = drops[i], x = i*cw + 1;
+          d.y += d.s * dt;
+          if(d.y > h + Math.random()*40) d.y = -Math.random()*h*0.5;
+          for(var k=0;k<5;k++){
+            var yy = d.y - k*13;
+            if(yy < -12 || yy > h) continue;
+            ctx.globalAlpha = k===0 ? 1 : Math.max(0, 0.5 - k*0.12);
+            ctx.fillStyle = k===0 ? c.fg : c.dim;
+            if(k===0){ ctx.shadowColor = c.glow; ctx.shadowBlur = 6; }
+            ctx.fillText(Math.random() < 0.5 ? '0' : '1', x, yy);
+            ctx.shadowBlur = 0;
+          }
+        }
+        ctx.globalAlpha = 1;
+      }};
+  }
+
+  function rr(ctx,x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r);
+    ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r);
+    ctx.arcTo(x,y,x+w,y,r);
+    ctx.closePath();
+  }
+
+  var D7 = {0:'abcdef',1:'bc',2:'abdeg',3:'abcdg',4:'bcfg',5:'acdfg',6:'acdefg',7:'abc',8:'abcdefg',9:'abcdfg'};
+  function drawDigit(ctx, ox, oy, ch, W, H, th){
+    var c = col();
+    var on = {}; (D7[ch]||'').split('').forEach(function(s){ on[s]=1; });
+    function paint(lit){
+      if(lit){ ctx.fillStyle = c.fg; ctx.shadowColor = c.glow; ctx.shadowBlur = 8; ctx.globalAlpha = 1; }
+      else { ctx.fillStyle = c.dim; ctx.shadowBlur = 0; ctx.globalAlpha = 0.45; }
+    }
+    function hSeg(px,py){ ctx.fillRect(px + th*0.7, py - th/2, W - th*1.4, th); }
+    function vSeg(px,py){ ctx.fillRect(px - th/2, py + th*0.7, th, H/2 - th*1.4); }
+    paint(on.a); hSeg(ox, oy);
+    paint(on.g); hSeg(ox, oy + H/2);
+    paint(on.d); hSeg(ox, oy + H);
+    paint(on.f); vSeg(ox, oy);
+    paint(on.b); vSeg(ox + W, oy);
+    paint(on.e); vSeg(ox, oy + H/2);
+    paint(on.c); vSeg(ox + W, oy + H/2);
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+  }
+  function makeTOTP(){
+    return { draw:function(ctx,w,h){
+      clearSolid(ctx,w,h);
+      var c = col();
+      var secs = Math.floor(Date.now()/1000);
+      var val = 30 - (secs % 30);
+      var tens = Math.floor(val/10), ones = val % 10;
+      var W = Math.min(20, w*0.16), H = W*1.9, th = Math.max(3, W*0.24);
+      var gap = W*0.9;
+      var totalW = W*2 + gap + th;
+      var ox = (w - totalW)/2;
+      var oy = (h - H)/2 - 4;
+      drawDigit(ctx, ox, oy, tens, W, H, th);
+      drawDigit(ctx, ox + W + gap, oy, ones, W, H, th);
+      var bw = w*0.62, bx = (w-bw)/2, by = oy + H + 12;
+      ctx.globalAlpha = 0.4; ctx.fillStyle = c.dim; ctx.fillRect(bx, by, bw, 3);
+      ctx.globalAlpha = 1; ctx.fillStyle = c.fg;
+      ctx.shadowColor = c.glow; ctx.shadowBlur = 6;
+      ctx.fillRect(bx, by, bw * (val/30), 3);
+      ctx.shadowBlur = 0;
+    }};
+  }
+
+  function makeBars(){
+    var n = 14, v = [], tgt = [], peak = [];
+    for(var i=0;i<n;i++){ v.push(0.3); tgt.push(Math.random()); peak.push(0.3); }
+    return { draw:function(ctx,w,h,t,dt){
+      clearSolid(ctx,w,h);
+      var c = col(); dt = dt || 0.016;
+      var pad = 6, gap = 3;
+      var bw = (w - pad*2 - gap*(n-1)) / n;
+      for(var i=0;i<n;i++){
+        if(Math.random() < 2.2*dt) tgt[i] = Math.random();
+        var base = 0.34 + 0.26*Math.sin(t*3 + i*0.62);
+        var mix = 0.42*base + 0.58*tgt[i];
+        v[i] += (mix - v[i]) * Math.min(1, dt*6);
+        var val = Math.max(0.05, Math.min(1, v[i]));
+        peak[i] = Math.max(val, peak[i] - dt*0.4);
+        var x = pad + i*(bw+gap);
+        var bh = val * (h - 10);
+        ctx.fillStyle = c.fg; ctx.globalAlpha = 0.9;
+        ctx.shadowColor = c.glow; ctx.shadowBlur = 5;
+        ctx.fillRect(x, h - 4 - bh, bw, bh);
+        ctx.shadowBlur = 0; ctx.globalAlpha = 0.55;
+        ctx.fillStyle = c.dim;
+        ctx.fillRect(x, h - 4 - peak[i]*(h-10) - 2, bw, 2);
+        ctx.globalAlpha = 1;
+      }
+    }};
+  }
+
+  var DISPLAYS = [
+    { id:'ticker',  label:'Dot-matrix ticker', note:'A 5&times;7 LED marquee scrolling the Kunji creed.', make:makeTicker },
+    { id:'entropy', label:'Entropy stream',    note:'Keystream bytes scrolling by like a serial console.', make:makeEntropy },
+    { id:'flap',    label:'Split-flap',        note:'Airport-board flaps settling on a status word.', make:makeFlap },
+    { id:'aes',     label:'AES state churn',   note:'A 4&times;4 byte grid stirring: the cipher block at rest.', make:makeAES },
+    { id:'scope',   label:'Oscilloscope',      note:'A phosphor trace with persistence and a little noise.', make:makeScope },
+    { id:'rain',    label:'Binary rain',       note:'Falling 0/1 columns, bright head, decaying trail.', make:makeRain },
+    { id:'totp',    label:'TOTP countdown',    note:'The real 30-second window on hand-drawn 7-segment.', make:makeTOTP },
+    { id:'bars',    label:'Entropy bars',      note:'Equaliser bars off a smoothed noise source.', make:makeBars }
+  ];
+
+  /* ---------- instances ---------- */
+  var active = [];
+  function attach(canvas, make){
+    var f = fit(canvas);
+    var ctx = f.ctx, w = f.w, h = f.h;
+    var d = make();
+    if(d.start) d.start(w,h);
+    var inst = {
+      canvas: canvas, make: make, d: d,
+      frame: function(dt,t){ this.d.draw(ctx,w,h,t,dt); },
+      refit: function(){ var g = fit(canvas); ctx = g.ctx; w = g.w; h = g.h; if(this.d.start) this.d.start(w,h); }
+    };
+    return inst;
+  }
+
+  /* ---------- build wordmark cards ---------- */
+  var FACES = [
+    { name:'Hanken Grotesk', css:"'Hanken Grotesk', sans-serif", tag:'Recommended', why:'Tall x-height, tight default fit, sturdy K and descending j &mdash; the nearest read to Chirp.' },
+    { name:'Figtree', css:"'Figtree', sans-serif", tag:'', why:'Rounder and friendlier; a touch wider than Chirp but very legible small.' },
+    { name:'Onest', css:"'Onest', sans-serif", tag:'', why:'Neutral and quiet. Least character, safest if the wordmark must recede.' },
+    { name:'Albert Sans', css:"'Albert Sans', sans-serif", tag:'', why:'Geometric skeleton, sharper terminals: more contemporary, less humanist than Chirp.' }
+  ];
+  var tg = document.getElementById('typeGrid');
+  FACES.forEach(function(f){
+    var card = document.createElement('div');
+    card.className = 'type-card' + (f.tag ? ' pick' : '');
+    card.innerHTML =
+      '<div class="sample" style="font-family:' + f.css + '">Kunji</div>' +
+      '<div class="meta"><span class="name">' + f.name + '</span>' +
+      (f.tag ? '<span class="tag">' + f.tag + '</span>' : '') + '</div>' +
+      '<div class="why">' + f.why + '</div>';
+    tg.appendChild(card);
+  });
+
+  /* ---------- build gallery ---------- */
+  var gal = document.getElementById('gallery');
+  var useButtons = [];
+  DISPLAYS.forEach(function(spec){
+    var card = document.createElement('div');
+    card.className = 'card';
+    var cid = 'cv_' + spec.id;
+    card.innerHTML =
+      '<div class="bar"><span class="label">' + spec.label + '</span>' +
+      '<button class="use" type="button" data-id="' + spec.id + '" aria-pressed="false">Use</button></div>' +
+      '<div class="screen"><canvas id="' + cid + '" width="496" height="240"></canvas></div>' +
+      '<div class="note">' + spec.note + '</div>';
+    gal.appendChild(card);
+    active.push(attach(card.querySelector('#' + cid), spec.make));
+    var b = card.querySelector('.use');
+    b.addEventListener('click', function(){
+      useButtons.forEach(function(x){ x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+      setMock(spec.make);
+    });
+    useButtons.push(b);
+  });
+
+  /* ---------- mock ---------- */
+  var mockCanvas = document.getElementById('mockCanvas');
+  var mockInst = attach(mockCanvas, DISPLAYS[0].make);
+  function setMock(make){ mockInst = attach(mockCanvas, make); if(PRM) mockInst.frame(0, 3); }
+  useButtons[0].setAttribute('aria-pressed', 'true');
+
+  /* ---------- loop ---------- */
+  var last = 0;
+  function tick(now){
+    var dt = last ? Math.min((now - last) / 1000, 0.05) : 0.016;
+    last = now;
+    var t = now / 1000;
+    for(var i=0;i<active.length;i++) active[i].frame(dt, t);
+    mockInst.frame(dt, t);
+    requestAnimationFrame(tick);
+  }
+  if(PRM){
+    for(var i=0;i<active.length;i++) active[i].frame(0, 3);
+    mockInst.frame(0, 3);
+  } else {
+    requestAnimationFrame(tick);
+  }
+
+  /* ---------- controls ---------- */
+  function group(sel, attr, fn){
+    var btns = Array.prototype.slice.call(document.querySelectorAll(sel));
+    btns.forEach(function(b){
+      b.addEventListener('click', function(){
+        btns.forEach(function(x){ x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+        fn(b.getAttribute(attr));
+        if(PRM){ for(var i=0;i<active.length;i++) active[i].frame(0,3); mockInst.frame(0,3); }
+      });
+    });
+  }
+  group('[data-scheme]', 'data-scheme', function(v){ SCHEME = v; });
+  group('[data-font]', 'data-font', function(v){ document.getElementById('mockWm').style.fontFamily = v; });
+
+  /* ---------- resize ---------- */
+  var rt;
+  window.addEventListener('resize', function(){
+    clearTimeout(rt);
+    rt = setTimeout(function(){
+      for(var i=0;i<active.length;i++) active[i].refit();
+      mockInst.refit();
+      if(PRM){ for(var j=0;j<active.length;j++) active[j].frame(0,3); mockInst.frame(0,3); }
+    }, 160);
+  });
+})();
+</script>
