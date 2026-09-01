@@ -373,3 +373,71 @@ test('openVault on a decoy-less (random filler) envelope: real works, decoy pass
   assert.equal((await openVault(env, { masterKey: RMK })).slot, 'real');
   await assert.rejects(() => openVault(env, { masterKey: DMK }), WrongPassphraseError);
 });
+
+// helper: build an envelope carrying BOTH a real and a decoy vault
+async function envWithDecoy(realVault, realMK, decoyVault, decoyMK) {
+  const text = await encodeEnvelope(realVault, {
+    masterKey: realMK, writerId: 'w',
+    decoy: { vault: decoyVault, masterKey: decoyMK },
+  });
+  return parseEnvelope(text);
+}
+
+test('openVault routes to the decoy slot for the decoy passphrase', async () => {
+  const real = addEntry(createVault(), { name: 'R', site: 'r', account: 'r' });
+  const decoy = addEntry(createVault(), { name: 'D', site: 'd', account: 'd' });
+  const env = await envWithDecoy(real, RMK, decoy, DMK);
+  const out = await openVault(env, { masterKey: DMK });
+  assert.equal(out.slot, 'decoy');
+  assert.equal(out.entries[0].name, 'D');
+  assert.equal(out._pad, undefined);
+});
+
+test('openVault opens the decoy even if the real ct is damaged', async () => {
+  const env = await envWithDecoy(createVault(), RMK, addEntry(createVault(), { name: 'D', site: 'd', account: 'd' }), DMK);
+  const bad = Buffer.from(env.ct, 'base64'); bad[0] ^= 1;
+  env.ct = bad.toString('base64');
+  const out = await openVault(env, { masterKey: DMK });
+  assert.equal(out.slot, 'decoy');
+  assert.equal(out.entries[0].name, 'D');
+});
+
+test('encodeEnvelope with a decoy: both slots decrypt, ct lengths equal, decoy kcv correct', async () => {
+  const real = addEntry(createVault(), { name: 'R', site: 'r', account: 'r', notes: 'the real one is longer '.repeat(4) });
+  const decoy = addEntry(createVault(), { name: 'D', site: 'd', account: 'd' });
+  const text = await encodeEnvelope(real, { masterKey: RMK, writerId: 'w', decoy: { vault: decoy, masterKey: DMK } });
+  const env = JSON.parse(text);
+  assert.equal(b64(env.ct).length, b64(env.decoy.ct).length, 'ct lengths equal');
+  assert.equal(env.decoy.kcv, await computeKcv(DMK));
+  assert.equal(b64(env.decoy.iv).length, 12);
+  const r = await openVault(env, { masterKey: RMK });
+  const d = await openVault(env, { masterKey: DMK });
+  assert.equal(r.entries[0].name, 'R');
+  assert.equal(d.entries[0].name, 'D');
+  assert.equal(r._pad, undefined);
+  assert.equal(d._pad, undefined);
+});
+
+test('encodeEnvelope with a decoy pads whichever plaintext is shorter', async () => {
+  const real = addEntry(createVault(), { name: 'R', site: 'r', account: 'r' });
+  const decoy = addEntry(createVault(), { name: 'D', site: 'd', account: 'd', notes: 'x'.repeat(500) });
+  const env = JSON.parse(await encodeEnvelope(real, { masterKey: RMK, writerId: 'w', decoy: { vault: decoy, masterKey: DMK } }));
+  assert.equal(b64(env.ct).length, b64(env.decoy.ct).length);
+});
+
+test('encodeEnvelope without a decoy is unchanged: random filler, no _pad', async () => {
+  const real = addEntry(createVault(), { name: 'R', site: 'r', account: 'r' });
+  const env = JSON.parse(await encodeEnvelope(real, { masterKey: RMK, writerId: 'w' }));
+  assert.equal(b64(env.decoy.ct).length, b64(env.ct).length);
+  const out = await unlockVault(env, { masterKey: RMK });
+  assert.equal(out._pad, undefined);
+  assert.equal(JSON.stringify(out.entries).includes('_pad'), false);
+});
+
+test('encodeEnvelope decoy: a fresh IV per slot per call', async () => {
+  const a = JSON.parse(await encodeEnvelope(createVault(), { masterKey: RMK, writerId: 'w', decoy: { vault: createVault(), masterKey: DMK } }));
+  const bEnv = JSON.parse(await encodeEnvelope(createVault(), { masterKey: RMK, writerId: 'w', decoy: { vault: createVault(), masterKey: DMK } }));
+  assert.notEqual(a.iv, bEnv.iv);
+  assert.notEqual(a.decoy.iv, bEnv.decoy.iv);
+  assert.notEqual(a.iv, a.decoy.iv);
+});

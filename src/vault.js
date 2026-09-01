@@ -92,13 +92,29 @@ export function removeEntry(vault, id) {
   return { ...vault, entries: vault.entries.filter((e) => e.id !== id) };
 }
 
-export async function encodeEnvelope(vault, { masterKey, identityHint = null, prevRevision = 0, writerId }) {
-  // Only `entries` and `settings` are persisted; any other top-level keys a
-  // future format version adds would be dropped on a v1 save-through.
-  const plainBytes = utf8(JSON.stringify({ entries: vault.entries, settings: vault.settings }));
+export async function encodeEnvelope(vault, { masterKey, identityHint = null, prevRevision = 0, writerId, decoy = null }) {
+  // Only `entries` and `settings` are persisted per slot; other top-level keys
+  // (e.g. a future format's) would be dropped on a v1 save-through. `_pad` is a
+  // length-matching filler added below and stripped by the loader.
+  const realObj = { entries: vault.entries, settings: vault.settings };
+  let realBytes = utf8(JSON.stringify(realObj));
+
+  let decoySection = null;
+  if (decoy) {
+    const decoyObj = { entries: decoy.vault.entries, settings: decoy.vault.settings };
+    let decoyBytes = utf8(JSON.stringify(decoyObj));
+    const target = Math.max(realBytes.length, decoyBytes.length);
+    if (realBytes.length < target) realBytes = utf8(JSON.stringify(padPlaintextTo(realObj, target)));
+    if (decoyBytes.length < target) decoyBytes = utf8(JSON.stringify(padPlaintextTo(decoyObj, target)));
+    const dKey = await deriveVaultKey(decoy.masterKey);
+    const dIv = randomBytes(12);
+    const dCt = await aesGcmEncrypt(dKey, dIv, decoyBytes, VAULT_AAD);
+    decoySection = { kcv: await computeKcv(decoy.masterKey), iv: bytesToBase64(dIv), ct: bytesToBase64(dCt) };
+  }
+
   const vaultKey = await deriveVaultKey(masterKey);
   const iv = randomBytes(12);
-  const ct = await aesGcmEncrypt(vaultKey, iv, plainBytes, VAULT_AAD);
+  const ct = await aesGcmEncrypt(vaultKey, iv, realBytes, VAULT_AAD);
   const envelope = {
     format: VAULT_FORMAT,
     v: VAULT_V,
@@ -107,7 +123,7 @@ export async function encodeEnvelope(vault, { masterKey, identityHint = null, pr
     kcv: await computeKcv(masterKey),
     iv: bytesToBase64(iv),
     ct: bytesToBase64(ct),
-    decoy: newDecoyBytes(ct.length),
+    decoy: decoySection || newDecoyBytes(ct.length),
     revision: prevRevision + 1,
     lastWriter: writerId,
     updatedAt: new Date().toISOString(),
