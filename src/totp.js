@@ -33,3 +33,35 @@ export async function hotp(keyBytes, counter, { algorithm = 'SHA-1', digits = 6 
     | mac[offset + 3];
   return String(bin % 10 ** digits).padStart(digits, '0');
 }
+
+// totpObj: { secret (base32 string), algorithm, digits, period }
+export async function totp(totpObj, { now = Date.now() } = {}) {
+  const key = base32Decode(totpObj.secret);
+  const seconds = Math.floor(now / 1000);
+  const counter = Math.floor(seconds / totpObj.period);
+  const code = await hotp(key, counter, totpObj);
+  const secondsRemaining = totpObj.period - (seconds % totpObj.period);
+  return { code, secondsRemaining, period: totpObj.period };
+}
+
+const ALGO_MAP = { SHA1: 'SHA-1', SHA256: 'SHA-256', SHA512: 'SHA-512',
+  'SHA-1': 'SHA-1', 'SHA-256': 'SHA-256', 'SHA-512': 'SHA-512' };
+
+// otpauth://totp/LABEL?secret=...&algorithm=...&digits=...&period=...&issuer=...
+// Returns null (never throws) for anything that is not a totp otpauth URI.
+export function parseOtpauth(uri) {
+  let u;
+  try { u = new URL(String(uri)); } catch { return null; }
+  if (u.protocol !== 'otpauth:') return null;
+  if (u.host.toLowerCase() !== 'totp') return null;
+  const q = u.searchParams;
+  const secret = (q.get('secret') || '').replace(/\s+/g, '');
+  if (!secret) return null;
+  const algorithm = ALGO_MAP[(q.get('algorithm') || 'SHA1').toUpperCase()] || 'SHA-1';
+  const digits = Number(q.get('digits')) || 6;
+  const period = Number(q.get('period')) || 30;
+  const label = decodeURIComponent(u.pathname.replace(/^\//, ''));
+  const issuer = q.get('issuer') || (label.includes(':') ? label.split(':')[0] : '');
+  const account = label.includes(':') ? label.split(':').slice(1).join(':') : label;
+  return { secret, algorithm, digits, period, issuer, account };
+}
