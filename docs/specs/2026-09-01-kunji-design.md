@@ -361,8 +361,14 @@ Contains no user data.
 App is transport-agnostic. It reads/writes one encrypted blob and offers
 import/export (file and QR). Documented options: nothing (single device),
 Syncthing (recommended, no cloud), a private git repo separate from the public
-one, an existing consumer file-sync (encrypted blob, user's call), or manual
-QR/file transfer.
+one, an existing consumer file-sync (encrypted blob, user's call), or file/QR
+transfer.
+
+Manual QR transfer is built in: **Show as QR** renders the encrypted envelope as
+a QR code (an animated multi-frame sequence past ~180 bytes, `KQR1 seq total
+nonce b64` framing, capped at 60 frames), and **Scan QR…** reads it with the
+device camera, in-app, with no decoder dependency. Import while unlocked routes
+through the same merge check as opening a file.
 
 **Conflict handling** is import-driven: Kunji compares a file the user opens (or
 scans) against the loaded vault with `classifyIncoming` and offers merge /
@@ -387,6 +393,12 @@ conflicts are rare.
 - **CI invariant checks.** Grep gate rejects `fetch(`, `XMLHttpRequest`,
   `WebSocket`, `navigator.sendBeacon`, external `src`/`href`, and any import from
   a URL. Test-vector gate rejects any change to `v1` outputs.
+- **First-party QR codec.** `src/qr.js` (byte-mode encoder) and `src/qr-decode.js`
+  (decoder) are hand-written and auditable by reading — no library. The camera
+  path uses `getUserMedia`, which opens no network connection; `<video>` is fed
+  via `srcObject`, not a URL, so no CSP directive is added. (If a browser is found
+  to enforce `media-src` on `srcObject`, add `media-src 'self' blob:` to both
+  build CSPs — `connect-src` is still never added.)
 - No analytics, no telemetry, stated as a project invariant.
 
 ---
