@@ -27,3 +27,25 @@ export async function hmacSha256(keyBytes, msgBytes) {
   const sig = await crypto.subtle.sign('HMAC', key, msgBytes);
   return new Uint8Array(sig);
 }
+
+export async function aesGcmEncrypt(keyBytes, ivBytes, plaintextBytes, aadBytes) {
+  const key = await crypto.subtle.importKey(
+    'raw', keyBytes, { name: 'AES-GCM' }, false, ['encrypt'],
+  );
+  const ct = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: ivBytes, additionalData: aadBytes, tagLength: 128 },
+    key, plaintextBytes,
+  );
+  return new Uint8Array(ct);
+}
+
+export async function aesGcmDecrypt(keyBytes, ivBytes, ciphertextBytes, aadBytes) {
+  const key = await crypto.subtle.importKey(
+    'raw', keyBytes, { name: 'AES-GCM' }, false, ['decrypt'],
+  );
+  const pt = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: ivBytes, additionalData: aadBytes, tagLength: 128 },
+    key, ciphertextBytes,
+  );
+  return new Uint8Array(pt);
+}

@@ -36,3 +36,42 @@ test('PBKDF2-SHA512 is deterministic', async () => {
   const b = await pbkdf2Sha512(utf8('pw'), utf8('id'), 500, 32);
   assert.equal(bytesToHex(a), bytesToHex(b));
 });
+
+import { aesGcmEncrypt, aesGcmDecrypt } from '../src/webcrypto.js';
+
+test('AES-256-GCM matches McGrew GCM test case 14', async () => {
+  const key = hexToBytes('00'.repeat(32));
+  const iv = hexToBytes('00'.repeat(12));
+  const pt = hexToBytes('00'.repeat(16));
+  const out = await aesGcmEncrypt(key, iv, pt, new Uint8Array(0));
+  // Web Crypto returns ciphertext || 16-byte tag.
+  assert.equal(
+    bytesToHex(out),
+    'cea7403d4d606b6e074ec5d3baf39d18d0d1c8a799996bf0265b98b5d48ab919',
+  );
+});
+
+test('AES-256-GCM round-trips with AAD', async () => {
+  const key = hexToBytes('11'.repeat(32));
+  const iv = hexToBytes('22'.repeat(12));
+  const aad = utf8('kunji-vault-v1');
+  const msg = utf8('{"entries":[],"settings":{}}');
+  const ct = await aesGcmEncrypt(key, iv, msg, aad);
+  const back = await aesGcmDecrypt(key, iv, ct, aad);
+  assert.equal(bytesToHex(back), bytesToHex(msg));
+});
+
+test('AES-256-GCM rejects a tampered ciphertext', async () => {
+  const key = hexToBytes('33'.repeat(32));
+  const iv = hexToBytes('44'.repeat(12));
+  const ct = await aesGcmEncrypt(key, iv, utf8('hello'), new Uint8Array(0));
+  ct[0] ^= 0x01;
+  await assert.rejects(() => aesGcmDecrypt(key, iv, ct, new Uint8Array(0)));
+});
+
+test('AES-256-GCM rejects a wrong AAD', async () => {
+  const key = hexToBytes('55'.repeat(32));
+  const iv = hexToBytes('66'.repeat(12));
+  const ct = await aesGcmEncrypt(key, iv, utf8('hello'), utf8('aad-one'));
+  await assert.rejects(() => aesGcmDecrypt(key, iv, ct, utf8('aad-two')));
+});
