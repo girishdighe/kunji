@@ -25,6 +25,66 @@ function initGenerateTab() {
   const copyBtn = $('copyBtn');
   const toggleMaster = $('toggleMaster');
 
+  const genPicker = $('genPicker');
+  const genPickNote = $('genPickNote');
+  let pickedEntry = null;           // { counter, rules, length } while a pick is active
+  let pickDebounce = null;
+
+  function clearPick() {
+    pickedEntry = null;
+    account.parentElement.classList.remove('picked');
+    const x = account.parentElement.querySelector('.pick-clear');
+    if (x) x.remove();
+    genPickNote.hidden = true;
+    genPickNote.textContent = '';
+  }
+
+  function pickRow(entry) {
+    // password path only in this task; sso handled in Task 6
+    account.value = entry.account;
+    lengthEl.value = String(entry.length ?? 20);
+    rulesEl.value = entry.rules ?? 'standard';
+    pickedEntry = { counter: entry.counter ?? 1, rules: rulesEl.value, length: parseInt(lengthEl.value, 10) };
+    account.parentElement.classList.add('picked');
+    if (!account.parentElement.querySelector('.pick-clear')) {
+      const x = document.createElement('button');
+      x.type = 'button'; x.className = 'pick-clear'; x.textContent = '✕';
+      x.addEventListener('click', () => { clearPick(); renderGenPicker(); });
+      account.parentElement.appendChild(x);
+    }
+    renderGenPicker();
+  }
+
+  function renderGenPicker() {
+    const matches = vaultBridge.forSite(site.value);
+    if (!matches.length) { genPicker.hidden = true; genPicker.innerHTML = ''; return; }
+    const rows = matches.map((e, i) => {
+      const meta = e.type === 'sso'
+        ? `via ${escAttr(e.via && e.via.site)}`
+        : `${escAttr(e.rules)} &middot; ${escAttr(e.length)}${(e.counter ?? 1) !== 1 ? ` &middot; #${escAttr(e.counter)}` : ''}`;
+      return `<div class="gp-row" role="option" data-i="${i}"><span class="gp-name">${escAttr(e.account) || '(no account)'}</span><span class="gp-meta">${meta}</span></div>`;
+    }).join('');
+    genPicker.innerHTML = `<div class="gp-head">from your vault</div>${rows}`;
+    genPicker.hidden = false;
+    genPicker.querySelectorAll('.gp-row').forEach((row) => {
+      row.addEventListener('click', () => pickRow(matches[Number(row.dataset.i)]));
+    });
+  }
+
+  function escAttr(s) {
+    return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  }
+
+  function scheduleGenPicker() {
+    clearTimeout(pickDebounce);
+    pickDebounce = setTimeout(renderGenPicker, 200);
+  }
+
+  site.addEventListener('change', renderGenPicker);
+  site.addEventListener('input', () => { clearPick(); scheduleGenPicker(); });
+  site.addEventListener('focus', renderGenPicker);
+  account.addEventListener('input', clearPick);
+
   const REVEAL_SECONDS = 20;
   const CLIPBOARD_SECONDS = 25;
   const revealTimer = {};
@@ -144,6 +204,8 @@ function initGenerateTab() {
       try { await navigator.clipboard.writeText(''); } catch (_) {}
     }, CLIPBOARD_SECONDS * 1000);
   });
+
+  return { refreshPicker: renderGenPicker };
 }
 
 function initApp() {
@@ -152,17 +214,18 @@ function initApp() {
   const genPanel = document.getElementById('tab-generate');
   const vaultPanel = document.getElementById('tab-vault');
 
+  const gen = initGenerateTab();
+
   function show(which) {
-    const gen = which === 'generate';
-    genPanel.hidden = !gen;
-    vaultPanel.hidden = gen;
-    genBtn.setAttribute('aria-selected', String(gen));
-    vaultBtn.setAttribute('aria-selected', String(!gen));
+    const isGen = which === 'generate';
+    genPanel.hidden = !isGen;
+    vaultPanel.hidden = isGen;
+    genBtn.setAttribute('aria-selected', String(isGen));
+    vaultBtn.setAttribute('aria-selected', String(!isGen));
+    if (isGen && gen && gen.refreshPicker) gen.refreshPicker();
   }
   genBtn.addEventListener('click', () => show('generate'));
   vaultBtn.addEventListener('click', () => show('vault'));
-
-  initGenerateTab();
 }
 
 if (typeof document !== 'undefined') {
