@@ -515,8 +515,12 @@ a registered passkey is a signal that a real vault exists on that device.
    3e QR transfer (`…-phase3e-qr-transfer-design.md`).
 4. **Distribution.** Reproducible build script, release checksums, signed tags,
    CI invariant + test-vector gates, docs for Syncthing / private git / manual.
-5. **Later, optional.** Own Argon2id as profile `v2`; WebAuthn biometric unlock;
-   live TOTP generation from stored secrets.
+5. **Later, optional.** Own Argon2id as profile `v2` (the profile *seam* shipped
+   in Phase 5a — a `PROFILES` registry with `v1` as the only entry; the Argon2id
+   primitive itself is deferred, see
+   `docs/specs/2026-09-01-kunji-v2-profile-requirements.md`). ~~WebAuthn biometric
+   unlock~~ (shipped, Phase 5b — PWA-only passkey unlock). ~~live TOTP generation
+   from stored secrets~~ (shipped, Phase 5c).
 
 ---
 
