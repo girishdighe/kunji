@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFileSync, existsSync, rmSync } from 'node:fs';
+import { readFileSync, existsSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 
 test('gen-icons writes four valid PNGs', () => {
@@ -69,4 +69,22 @@ test('build --no-pwa skips dist/pwa and leaves kunji.html identical', () => {
   assert.ok(!existsSync('dist/pwa'), 'no dist/pwa');
   assert.ok(withPwa.equals(readFileSync('dist/kunji.html')), 'kunji.html unchanged');
   execFileSync('node', ['tools/build.mjs'], { stdio: 'pipe' }); // restore for later tests
+});
+
+test('check-invariants passes with dist/pwa present and reports it', () => {
+  execFileSync('node', ['tools/build.mjs'], { stdio: 'pipe' });
+  const out = execFileSync('node', ['tools/check-invariants.mjs'], { encoding: 'utf8' });
+  assert.match(out, /invariants ok/);
+});
+
+test('check-invariants fails if dist/pwa gains an external URL', () => {
+  execFileSync('node', ['tools/build.mjs'], { stdio: 'pipe' });
+  const p = 'dist/pwa/manifest.webmanifest';
+  const orig = readFileSync(p, 'utf8');
+  writeFileSync(p, orig.replace('"./index.html"', '"https://evil.example/x"'));
+  let failed = false;
+  try { execFileSync('node', ['tools/check-invariants.mjs'], { stdio: 'pipe' }); }
+  catch { failed = true; }
+  writeFileSync(p, orig);
+  assert.ok(failed, 'external URL in dist/pwa must fail the scan');
 });
