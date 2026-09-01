@@ -3,10 +3,13 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 
 // Explicit dependency order.
-// encoding -> webcrypto -> derive -> vault -> vault-bridge -> app -> vault-ui.
+// encoding -> webcrypto -> qr modules -> derive -> vault -> vault-bridge -> app -> vault-ui.
 const JS_ORDER = [
   'src/encoding.js',
   'src/webcrypto.js',
+  'src/qr.js',
+  'src/qr-decode.js',
+  'src/qr-transfer.js',
   'src/derive.js',
   'src/vault.js',
   'src/vault-bridge.js',

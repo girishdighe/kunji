@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test",
+    "test": "node --test --test-concurrency=1",
     "build": "node tools/build.mjs",
     "check": "node tools/check-invariants.mjs",
-    "verify": "node --test && node tools/build.mjs && node tools/check-invariants.mjs"
+    "verify": "node --test --test-concurrency=1 && node tools/build.mjs && node tools/check-invariants.mjs"
   }
 }
