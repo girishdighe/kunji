@@ -1,6 +1,6 @@
 import { utf8, bytesToBase64, base64ToBytes, fromUtf8 } from './encoding.js';
 import { aesGcmEncrypt, aesGcmDecrypt } from './webcrypto.js';
-import { deriveVaultKey, computeKcv, PBKDF2_ITERATIONS } from './derive.js';
+import { deriveVaultKey, computeKcv, PBKDF2_ITERATIONS, normaliseInput } from './derive.js';
 
 export const VAULT_FORMAT = 'kunji-data';
 export const VAULT_V = 1;
@@ -162,4 +162,28 @@ export async function unlockVault(envelope, { masterKey }) {
     throw new CorruptVaultError('the vault contents are not in the expected shape');
   }
   return { entries: plain.entries, settings: plain.settings };
+}
+
+// --- Phase 3a: account-picker lookups (pure) ---
+
+// Every entry whose site matches `rawSite` under the shared input normalisation.
+// Empty/whitespace `rawSite` -> []. Input order is preserved. Does not mutate.
+export function entriesForSite(entries, rawSite) {
+  const s = normaliseInput(rawSite || '');
+  if (!s) return [];
+  return entries.filter((e) => e && typeof e.site === 'string' && normaliseInput(e.site) === s);
+}
+
+// For a pick: a non-sso entry resolves to itself; an `sso` entry resolves to the
+// underlying entry it points at (a non-sso entry whose normalised site+account
+// equal the sso entry's `via`), or null when that entry is not present.
+export function resolveEntryForPick(entries, entry) {
+  if (!entry) return null;
+  if (entry.type !== 'sso') return entry;
+  const viaSite = normaliseInput((entry.via && entry.via.site) || '');
+  const viaAccount = normaliseInput((entry.via && entry.via.account) || '');
+  if (!viaSite) return null;
+  return entries.find((e) => e && e.type !== 'sso'
+    && typeof e.site === 'string' && typeof e.account === 'string'
+    && normaliseInput(e.site) === viaSite && normaliseInput(e.account) === viaAccount) || null;
 }

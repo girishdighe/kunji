@@ -274,3 +274,50 @@ test('makeEntry sso branch drops stray password fields; password branch drops st
   assert.equal(pw.type, 'password');
   assert.ok(!('via' in pw), 'password entry must not carry via');
 });
+
+import { entriesForSite, resolveEntryForPick } from '../src/vault.js';
+
+const PW = (over = {}) => makeEntry({ type: 'password', name: 'n', site: 's', account: 'a', ...over });
+const SSO = (over = {}) => makeEntry({ type: 'sso', name: 'n', site: 's', account: 'a', via: { site: 'g', account: 'x' }, ...over });
+
+test('entriesForSite matches on normalised site equality only', () => {
+  const list = [PW({ site: 'GitHub.com', account: 'me' }), PW({ site: '  github.com ', account: 'work' }), PW({ site: 'gitlab.com' })];
+  const hit = entriesForSite(list, 'github.com');
+  assert.equal(hit.length, 2);
+  assert.deepEqual(hit.map((e) => e.account), ['me', 'work']); // input order preserved
+});
+
+test('entriesForSite: empty / whitespace / no-match returns []', () => {
+  const list = [PW({ site: 'github.com' })];
+  assert.deepEqual(entriesForSite(list, ''), []);
+  assert.deepEqual(entriesForSite(list, '   '), []);
+  assert.deepEqual(entriesForSite(list, 'example.com'), []);
+});
+
+test('entriesForSite does not mutate the input array or entries', () => {
+  const list = [PW({ site: 'x.com' })];
+  const snapshot = JSON.stringify(list);
+  entriesForSite(list, 'x.com');
+  assert.equal(JSON.stringify(list), snapshot);
+});
+
+test('resolveEntryForPick: password entry resolves to itself', () => {
+  const e = PW({ site: 'x.com', account: 'me' });
+  assert.equal(resolveEntryForPick([e], e), e);
+});
+
+test('resolveEntryForPick: sso entry resolves to the underlying entry', () => {
+  const google = PW({ site: 'google.com', account: 'me@gmail.com' });
+  const news = SSO({ site: 'news.example.com', account: 'me', via: { site: 'Google.com', account: 'ME@gmail.com' } });
+  assert.equal(resolveEntryForPick([google, news], news), google);
+});
+
+test('resolveEntryForPick: sso with no matching underlying entry returns null', () => {
+  const news = SSO({ via: { site: 'google.com', account: 'gone' } });
+  assert.equal(resolveEntryForPick([news], news), null);
+});
+
+test('resolveEntryForPick: sso with blank via returns null', () => {
+  const news = SSO({ via: { site: '', account: '' } });
+  assert.equal(resolveEntryForPick([news], news), null);
+});
