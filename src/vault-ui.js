@@ -35,6 +35,73 @@ function initVaultTab() {
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]
   ));
 
+  // The pair the list/detail/editor currently operate on.
+  function useSlot(slot) {
+    if (slot === activeSlot) return;
+    if (activeSlot === 'real') { realVault = vault; realMasterKey = masterKey; }
+    else { decoyVault = vault; decoyMasterKey = masterKey; }
+    activeSlot = slot;
+    if (slot === 'real') { vault = realVault; masterKey = realMasterKey; }
+    else { vault = decoyVault; masterKey = decoyMasterKey; }
+    view = 'list'; selectedId = null; listQuery = '';
+    vaultBridge.publish(vault.entries);
+    render();
+  }
+
+  function decoyPrompt(mode) {
+    panel.innerHTML = `
+      <div class="v-bar"><button class="link-btn" id="dpCancel" type="button">&lsaquo; Cancel</button></div>
+      <p class="v-explain">${mode === 'change' ? 'Enter a new decoy passphrase. The decoy entries are kept.' : 'Set a decoy passphrase. Under coercion, hand this one over — it opens a separate, believable vault.'}</p>
+      <div class="fields">
+        <div class="field"><input id="dpIdentity" type="text" autocomplete="off" spellcheck="false" placeholder=" " value="${esc(sessionIdentity)}"><label for="dpIdentity">Decoy identity</label></div>
+        <div class="field"><input id="dpPass" type="password" autocomplete="off" spellcheck="false" placeholder=" "><label for="dpPass">Decoy passphrase</label></div>
+        <div class="field"><input id="dpConfirm" type="password" autocomplete="off" spellcheck="false" placeholder=" "><label for="dpConfirm">Confirm</label></div>
+      </div>
+      <button class="btn-primary" id="dpGo" type="button">${mode === 'change' ? 'Change decoy passphrase' : 'Create decoy'}</button>
+      <div class="error" id="dpError"></div>
+    `;
+    panel.querySelector('#dpCancel').addEventListener('click', () => render());
+    panel.querySelector('#dpGo').addEventListener('click', async () => {
+      const de = panel.querySelector('#dpError');
+      de.textContent = '';
+      const id = panel.querySelector('#dpIdentity').value.trim();
+      const pw = panel.querySelector('#dpPass').value;
+      const cf = panel.querySelector('#dpConfirm').value;
+      if (!id || !pw) { de.textContent = 'Identity and passphrase are required.'; return; }
+      if (pw !== cf) { de.textContent = 'The two passphrases do not match.'; return; }
+      const btn = panel.querySelector('#dpGo');
+      btn.disabled = true; btn.textContent = 'Working…';
+      try {
+        const dmk = await deriveMasterKey(pw, id);
+        const dmkKcv = await computeKcv(dmk);
+        const realKcv = loadedEnvelope ? loadedEnvelope.kcv : await computeKcv(activeSlot === 'real' ? masterKey : realMasterKey);
+        if (dmkKcv === realKcv) {
+          de.textContent = 'That passphrase collides with your real one — choose a different decoy passphrase.';
+          btn.disabled = false; btn.textContent = mode === 'change' ? 'Change decoy passphrase' : 'Create decoy'; return;
+        }
+        if (mode === 'change') {
+          decoyMasterKey = dmk; // keep decoyVault as-is
+        } else if (loadedEnvelope && loadedEnvelope.decoy && dmkKcv === loadedEnvelope.decoy.kcv) {
+          const opened = await openVault(loadedEnvelope, { masterKey: dmk });
+          decoyVault = { entries: opened.entries, settings: opened.settings };
+          decoyMasterKey = dmk;
+        } else {
+          decoyVault = createVault();
+          decoyMasterKey = dmk;
+        }
+        realVault = vault; realMasterKey = masterKey;
+        activeSlot = 'decoy';
+        vault = decoyVault; masterKey = decoyMasterKey;
+        view = 'list'; selectedId = null; listQuery = '';
+        markDirty();
+        render();
+      } catch {
+        de.textContent = 'Could not set up the decoy.';
+        btn.disabled = false; btn.textContent = mode === 'change' ? 'Change decoy passphrase' : 'Create decoy';
+      }
+    });
+  }
+
   function wipe() {
     masterKey = null;
     vault = null;
@@ -344,8 +411,21 @@ function initVaultTab() {
       <input class="v-search" id="vSearch" type="text" placeholder="Search…" value="${esc(listQuery || '')}">
       <div id="vRows">${rowsHtml()}</div>
       ${dirty ? '<div class="v-dirty">Unsaved changes<button class="link-btn" id="vSaveTop" type="button" style="color:#f5c518">Save vault</button></div>' : ''}
+      ${activeSlot === 'decoy' ? '<div class="v-decoy-banner">⚠ Editing the DECOY vault</div>' : ''}
+      ${unlockedSlot === 'real' && decoyMasterKey ? `
+        <div class="v-slot-toggle">
+          <button id="vSlotReal" type="button" aria-pressed="${activeSlot === 'real'}">Real vault</button>
+          <button id="vSlotDecoy" type="button" aria-pressed="${activeSlot === 'decoy'}">Decoy</button>
+        </div>` : ''}
       <div class="v-foot"><button class="link-btn" id="vSave" type="button">Save vault</button> &middot; <button class="link-btn" id="vLock" type="button">Lock</button> &middot; <span id="vIdleCountdown"></span></div>
       <label class="v-foot" style="display:block"><input type="checkbox" id="vHint" ${identityHintOn ? 'checked' : ''}> Prefill identity on devices that open this file <span class="v-danger">(anyone with the file can read it)</span></label>
+      ${unlockedSlot === 'real' && activeSlot === 'real' ? `
+        <div class="v-decoy-setup">
+          ${decoyMasterKey
+            ? '<button class="link-btn" id="vDecoyChange" type="button">Change decoy passphrase</button> &middot; <button class="link-btn v-danger" id="vDecoyRemove" type="button">Remove decoy</button>'
+            : '<button class="link-btn" id="vDecoySetup" type="button">Set up decoy&hellip;</button>'}
+          <div class="error" id="vDecoyError"></div>
+        </div>` : ''}
       <div class="error" id="vListError"></div>
     `;
     paintCountdown();
@@ -365,6 +445,16 @@ function initVaultTab() {
     panel.querySelector('#vLock').addEventListener('click', () => {
       if (dirty && !confirm('Discard unsaved changes and lock?')) return;
       lock();
+    });
+    if (panel.querySelector('#vSlotReal')) panel.querySelector('#vSlotReal').addEventListener('click', () => useSlot('real'));
+    if (panel.querySelector('#vSlotDecoy')) panel.querySelector('#vSlotDecoy').addEventListener('click', () => useSlot('decoy'));
+    if (panel.querySelector('#vDecoySetup')) panel.querySelector('#vDecoySetup').addEventListener('click', () => decoyPrompt('create'));
+    if (panel.querySelector('#vDecoyChange')) panel.querySelector('#vDecoyChange').addEventListener('click', () => decoyPrompt('change'));
+    if (panel.querySelector('#vDecoyRemove')) panel.querySelector('#vDecoyRemove').addEventListener('click', () => {
+      if (!confirm('Remove the decoy? The decoy passphrase will stop working on the next Save.')) return;
+      decoyVault = null; decoyMasterKey = null;
+      if (activeSlot === 'decoy') { activeSlot = 'real'; vault = realVault; masterKey = realMasterKey; }
+      markDirty(); render();
     });
   }
 
