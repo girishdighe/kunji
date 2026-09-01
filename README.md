@@ -73,6 +73,10 @@ one, **Scan QR…** on the other. Large vaults animate across several frames.
 An entry with a TOTP secret (paste the base32 or an `otpauth://` URI) shows the
 live 6-digit 2FA code and a countdown in its detail view.
 
+On the installed app you can register a **passkey** so a device unlocks the vault
+with its fingerprint / PIN instead of the master passphrase. The passphrase
+always still works; the passkey is per-device and never leaves it.
+
 ## The v1 profile is frozen
 
 `tests/vectors/v1.json` locks the derivation output. Any code change that alters a

@@ -468,7 +468,11 @@ Reference: the approved mockup (`scratchpad/kunji-mockup.html`). X.com styling.
   counter K").
 - **Hygiene.** Master field cleared after generate; clipboard cleared after
   `clipboardClearSeconds`; no secret written to `localStorage` or a service
-  worker cache; `autocomplete="off"` and `spellcheck="false"` on secret fields.
+  worker cache, **with one exception**: a passkey-wrapped master key
+  (AES-256-GCM under a key derived from a WebAuthn PRF secret). That blob is
+  inert without the platform authenticator that produced the PRF secret, it is
+  per-device, and it is never written to the vault file or cached by the service
+  worker. `autocomplete="off"` and `spellcheck="false"` on secret fields.
 - **Accessibility.** A larger-text pass for non-technical users; visible focus
   states; labels tied with `for`/`id`; hit targets >= 44px on touch.
 - **Offline.** Service worker caches only the app shell (which is the whole app),
@@ -486,8 +490,11 @@ Reference: the approved mockup (`scratchpad/kunji-mockup.html`). X.com styling.
 | iOS / iPadOS | Safari "Add to Home Screen" | No Syncthing on iOS: use QR/file import, or a private git client |
 | Linux | Chromium install, or open file | |
 
-WebAuthn/passkey biometric unlock (gating a locally stored wrap of `vaultKey`) is
-a later enhancement where the platform supports the PRF extension. Not in v1.
+Passkey unlock (WebAuthn PRF extension wrapping the master key in a per-device
+`localStorage` blob) is available in the installed PWA build on platforms with a
+PRF-capable authenticator. The single-file `file://` build cannot use it (no
+origin). It is a per-device convenience — the passphrase always still works, and
+a registered passkey is a signal that a real vault exists on that device.
 
 ---
 
