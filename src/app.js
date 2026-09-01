@@ -7,7 +7,7 @@ export function groupInFours(str) {
   return str.replace(/(.{4})/g, '$1 ').trim();
 }
 
-function initUI() {
+function initGenerateTab() {
   const $ = (id) => document.getElementById(id);
   const identity = $('identity');
   const master = $('master');
@@ -146,6 +146,25 @@ function initUI() {
   });
 }
 
+function initApp() {
+  const genBtn = document.getElementById('tabBtnGenerate');
+  const vaultBtn = document.getElementById('tabBtnVault');
+  const genPanel = document.getElementById('tab-generate');
+  const vaultPanel = document.getElementById('tab-vault');
+
+  function show(which) {
+    const gen = which === 'generate';
+    genPanel.hidden = !gen;
+    vaultPanel.hidden = gen;
+    genBtn.setAttribute('aria-selected', String(gen));
+    vaultBtn.setAttribute('aria-selected', String(!gen));
+  }
+  genBtn.addEventListener('click', () => show('generate'));
+  vaultBtn.addEventListener('click', () => show('vault'));
+
+  initGenerateTab();
+}
+
 if (typeof document !== 'undefined') {
-  initUI();
+  initApp();
 }
