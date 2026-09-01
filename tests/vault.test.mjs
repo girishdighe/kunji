@@ -154,3 +154,54 @@ test('encodeEnvelope defaults prevRevision to 0 -> revision 1', async () => {
   const env = JSON.parse(await encodeEnvelope(createVault(), { masterKey: MK, writerId: 'w' }));
   assert.equal(env.revision, 1);
 });
+
+import { parseEnvelope, unlockVault } from '../src/vault.js';
+
+const OTHER_MK = hexToBytes('cd'.repeat(32));
+
+test('parseEnvelope accepts a well-formed envelope', async () => {
+  const text = await encodeEnvelope(createVault(), { masterKey: MK, writerId: 'w' });
+  const env = parseEnvelope(text);
+  assert.equal(env.format, 'kunji-data');
+});
+
+test('parseEnvelope rejects non-JSON, wrong format, wrong version, missing fields', () => {
+  assert.throws(() => parseEnvelope('not json'), BadEnvelopeError);
+  assert.throws(() => parseEnvelope(JSON.stringify({ format: 'other', v: 1 })), BadEnvelopeError);
+  assert.throws(() => parseEnvelope(JSON.stringify({ format: 'kunji-data', v: 2 })), BadEnvelopeError);
+  assert.throws(() => parseEnvelope(JSON.stringify({ format: 'kunji-data', v: 1 })), BadEnvelopeError);
+});
+
+test('unlockVault round-trips entries and settings', async () => {
+  const v = addEntry(createVault(), { name: 'GitHub', site: 'github.com', account: 'me', notes: 'hi' });
+  const env = parseEnvelope(await encodeEnvelope(v, { masterKey: MK, writerId: 'w' }));
+  const out = await unlockVault(env, { masterKey: MK });
+  assert.equal(out.entries.length, 1);
+  assert.equal(out.entries[0].name, 'GitHub');
+  assert.equal(out.entries[0].notes, 'hi');
+  assert.equal(out.settings.autoLockMinutes, 5);
+});
+
+test('unlockVault throws WrongPassphraseError on KCV mismatch', async () => {
+  const env = parseEnvelope(await encodeEnvelope(createVault(), { masterKey: MK, writerId: 'w' }));
+  await assert.rejects(() => unlockVault(env, { masterKey: OTHER_MK }), WrongPassphraseError);
+});
+
+test('unlockVault throws CorruptVaultError when the ciphertext is damaged', async () => {
+  const env = parseEnvelope(await encodeEnvelope(createVault(), { masterKey: MK, writerId: 'w' }));
+  const bad = { ...env, ct: bytesToBase64Local(flipFirstByte(b64(env.ct))) };
+  await assert.rejects(() => unlockVault(bad, { masterKey: MK }), CorruptVaultError);
+});
+
+function flipFirstByte(bytes) { const c = bytes.slice(); c[0] ^= 1; return c; }
+function bytesToBase64Local(bytes) { return Buffer.from(bytes).toString('base64'); }
+
+test('frozen decrypt vector: fixed vaultKey/iv/ct/aad -> known plaintext', async () => {
+  const { aesGcmDecrypt } = await import('../src/webcrypto.js');
+  const { utf8: u, hexToBytes: h, fromUtf8: f } = await import('../src/encoding.js');
+  const vaultKey = h('0000000000000000000000000000000000000000000000000000000000000000');
+  const iv = h('000000000000000000000000');
+  const ct = h('b58525533912020b746cff88e7dfbf6b171477a359c15956ebd988f34d793ed45791dd65c34d2f2e614c3939');
+  const plain = await aesGcmDecrypt(vaultKey, iv, ct, u('kunji-vault-v1'));
+  assert.equal(f(plain), '{"entries":[],"settings":{}}');
+});

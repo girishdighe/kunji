@@ -1,5 +1,5 @@
-import { utf8, bytesToBase64 } from './encoding.js';
-import { aesGcmEncrypt } from './webcrypto.js';
+import { utf8, bytesToBase64, base64ToBytes, fromUtf8 } from './encoding.js';
+import { aesGcmEncrypt, aesGcmDecrypt } from './webcrypto.js';
 import { deriveVaultKey, computeKcv, PBKDF2_ITERATIONS } from './derive.js';
 
 export const VAULT_FORMAT = 'kunji-data';
@@ -107,4 +107,49 @@ export async function encodeEnvelope(vault, { masterKey, identityHint = null, pr
     updatedAt: new Date().toISOString(),
   };
   return JSON.stringify(envelope, null, 2) + '\n';
+}
+
+export function parseEnvelope(text) {
+  let env;
+  try {
+    env = JSON.parse(text);
+  } catch {
+    throw new BadEnvelopeError('not valid JSON');
+  }
+  if (!env || typeof env !== 'object') throw new BadEnvelopeError('not an object');
+  if (env.format !== VAULT_FORMAT) throw new BadEnvelopeError('not a Kunji vault file');
+  if (env.v !== VAULT_V) throw new BadEnvelopeError(`unsupported version ${env.v}`);
+  for (const k of ['kcv', 'iv', 'ct']) {
+    if (typeof env[k] !== 'string') throw new BadEnvelopeError(`missing ${k}`);
+  }
+  const d = env.decoy;
+  if (!d || typeof d.kcv !== 'string' || typeof d.iv !== 'string' || typeof d.ct !== 'string') {
+    throw new BadEnvelopeError('missing decoy section');
+  }
+  return env;
+}
+
+export async function unlockVault(envelope, { masterKey }) {
+  if (await computeKcv(masterKey) !== envelope.kcv) {
+    throw new WrongPassphraseError('that is not the passphrase for this vault');
+  }
+  const vaultKey = await deriveVaultKey(masterKey);
+  let plainBytes;
+  try {
+    plainBytes = await aesGcmDecrypt(
+      vaultKey, base64ToBytes(envelope.iv), base64ToBytes(envelope.ct), VAULT_AAD,
+    );
+  } catch {
+    throw new CorruptVaultError('the file could not be decrypted');
+  }
+  let plain;
+  try {
+    plain = JSON.parse(fromUtf8(plainBytes));
+  } catch {
+    throw new CorruptVaultError('the vault contents could not be read');
+  }
+  if (!plain || !Array.isArray(plain.entries) || typeof plain.settings !== 'object') {
+    throw new CorruptVaultError('the vault contents are not in the expected shape');
+  }
+  return { entries: plain.entries, settings: plain.settings };
 }
