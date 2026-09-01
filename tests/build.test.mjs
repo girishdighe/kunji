@@ -63,3 +63,10 @@ test('built html inlines src/passkey-store.js before vault.js', () => {
   assert.ok(html.includes('==== src/passkey-store.js ===='));
   assert.ok(html.indexOf('src/passkey-store.js') < html.indexOf('src/vault.js'));
 });
+
+test('built html inlines src/webauthn.js before vault.js', () => {
+  execFileSync('node', ['tools/build.mjs'], { stdio: 'pipe' });
+  const html = readFileSync('dist/kunji.html', 'utf8');
+  assert.ok(html.includes('==== src/webauthn.js ===='));
+  assert.ok(html.indexOf('src/webauthn.js') < html.indexOf('src/vault.js'));
+});

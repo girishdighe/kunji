@@ -3,12 +3,13 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 
 // Explicit dependency order.
-// encoding -> webcrypto -> totp -> passkey-store -> qr modules -> derive -> vault -> vault-bridge -> app -> vault-ui.
+// encoding -> webcrypto -> totp -> passkey-store -> webauthn -> qr modules -> derive -> vault -> vault-bridge -> app -> vault-ui.
 const JS_ORDER = [
   'src/encoding.js',
   'src/webcrypto.js',
   'src/totp.js',
   'src/passkey-store.js',
+  'src/webauthn.js',
   'src/qr.js',
   'src/qr-decode.js',
   'src/qr-transfer.js',
