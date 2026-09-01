@@ -18,6 +18,11 @@ function initVaultTab() {
   let identityHintOn = false;    // write identity into the plaintext envelope?
   let dirty = false;
   let view = 'list';             // list | detail | editor  (within UNLOCKED)
+  let detailCleanups = [];
+  function runDetailCleanups() {
+    detailCleanups.forEach((fn) => { try { fn(); } catch (_) {} });
+    detailCleanups = [];
+  }
   let selectedId = null;
   let listQuery = '';
   let sessionMoveNoteShown = false;
@@ -106,6 +111,7 @@ function initVaultTab() {
 
   function wipe() {
     stopScan();
+    runDetailCleanups();
     masterKey = null;
     vault = null;
     sessionIdentity = '';
@@ -126,6 +132,7 @@ function initVaultTab() {
   }
 
   function render() {
+    runDetailCleanups();
     if (state === 'NO_VAULT') return renderNoVault();
     if (state === 'CREATE') return renderCreate();
     if (state === 'LOCKED') return renderLocked();
@@ -729,7 +736,9 @@ function initVaultTab() {
       <div class="error" id="vDetailError"></div>
       <div class="v-sec"><div class="v-h">Notes</div><div class="v-meta">${esc(e.notes) || '—'}</div></div>
       <div class="v-sec"><div class="v-h">Recovery codes &middot; ${codes.length}</div><div id="vCodes" class="v-meta">${codes.length ? '<button class="link-btn" id="vShowCodes" type="button">Reveal / copy</button>' : '—'}</div></div>
-      <div class="v-sec"><div class="v-h">TOTP secret</div><div class="v-meta">${e.totp ? '&bull;&bull;&bull;&bull; <button class="link-btn" id="vTotpCopy" type="button">copy</button>' : '—'}</div></div>
+      <div class="v-sec"><div class="v-h">TOTP</div>
+        <div class="v-meta" id="vTotpBox">${e.totp ? '<span class="v-totp-code" id="vTotpCode">……</span> <button class="link-btn" id="vTotpCopy" type="button">copy</button><div class="v-totp-bar"><i id="vTotpFill"></i></div>' : '—'}</div>
+      </div>
     `;
 
     panel.querySelector('#vBack').addEventListener('click', () => { view = 'list'; render(); });
@@ -785,10 +794,39 @@ function initVaultTab() {
     if (showCodes) showCodes.addEventListener('click', () => {
       panel.querySelector('#vCodes').innerHTML = codes.map((c) => esc(c)).join('<br>');
     });
-    const totpCopy = panel.querySelector('#vTotpCopy');
-    if (totpCopy) totpCopy.addEventListener('click', async () => {
-      try { await navigator.clipboard.writeText(e.totp); totpCopy.textContent = 'copied'; } catch (_) {}
-    });
+    if (e.totp) {
+      const codeEl = panel.querySelector('#vTotpCode');
+      const fillEl = panel.querySelector('#vTotpFill');
+      const copyEl = panel.querySelector('#vTotpCopy');
+      let totpInterval = null;
+      const tick = async () => {
+        try {
+          const r = await totp(e.totp);
+          const half = e.totp.digits > 6 ? 4 : 3;
+          codeEl.textContent = `${r.code.slice(0, half)} ${r.code.slice(half)}`;
+          codeEl.dataset.raw = r.code;
+          fillEl.style.width = `${Math.round((r.secondsRemaining / r.period) * 100)}%`;
+        } catch {
+          codeEl.textContent = 'invalid base32';
+          codeEl.dataset.raw = '';
+          if (totpInterval) { clearInterval(totpInterval); totpInterval = null; }
+        }
+      };
+      tick();
+      totpInterval = setInterval(tick, 1000);
+      copyEl.addEventListener('click', async () => {
+        const raw = codeEl.dataset.raw;
+        if (!raw) return;
+        try {
+          await navigator.clipboard.writeText(raw);
+          copyEl.textContent = 'copied';
+          setTimeout(() => { copyEl.textContent = 'copy'; }, 1500);
+          setTimeout(async () => { try { await navigator.clipboard.writeText(''); } catch (_) {} },
+            (vault.settings.clipboardClearSeconds || 25) * 1000);
+        } catch (_) {}
+      });
+      detailCleanups.push(() => { if (totpInterval) clearInterval(totpInterval); });
+    }
   }
 
   function renderEditor() {
