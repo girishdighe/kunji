@@ -157,10 +157,8 @@ export async function enforceClasses(chars, entrySeed, rules, charset) {
   return result;
 }
 
-export async function deriveMasterKey(passphrase, identity, iterations = PBKDF2_ITERATIONS) {
-  return pbkdf2Sha512(
-    utf8(passphrase), utf8(normaliseInput(identity)), iterations, MASTER_KEY_BYTES,
-  );
+export async function deriveMasterKey(passphrase, identity, profile = DEFAULT_PROFILE) {
+  return profileOf(profile).deriveMasterKey(passphrase, normaliseInput(identity));
 }
 
 export async function computeKcv(masterKey) {
@@ -186,11 +184,7 @@ export async function derivePassword(params) {
 
   const masterKey = params.masterKey
     ? params.masterKey
-    : await deriveMasterKey(
-        params.passphrase,
-        normaliseInput(params.identity ?? ''),
-        params.iterations ?? PBKDF2_ITERATIONS,
-      );
+    : await deriveMasterKey(params.passphrase, params.identity ?? '');
 
   const entrySeed = await deriveEntrySeed(masterKey, { site, account, counter, rules, length });
   const raw = await generateChars(entrySeed, charset, length);

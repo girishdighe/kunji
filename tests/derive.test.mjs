@@ -214,9 +214,9 @@ import { deriveMasterKey, computeKcv, derivePassword } from '../src/derive.js';
 const FIXED_MK = hexToBytes('abababababababababababababababababababababababababababababababab12');
 
 test('deriveMasterKey is PBKDF2-SHA512 over passphrase with normalised identity as salt', async () => {
-  const mk = await deriveMasterKey('correct horse battery staple', '  ALEX@example.com ', 1000);
   const { pbkdf2Sha512 } = await import('../src/webcrypto.js');
   const { utf8 } = await import('../src/encoding.js');
+  const mk = await pbkdf2Sha512(utf8('correct horse battery staple'), utf8(normaliseInput('  ALEX@example.com ')), 1000, 32);
   const expected = await pbkdf2Sha512(
     utf8('correct horse battery staple'), utf8('alex@example.com'), 1000, 32,
   );
@@ -332,4 +332,18 @@ test('PROFILES.v1.deriveMasterKey matches raw PBKDF2 for a known input', async (
   const got = await PROFILES.v1.deriveMasterKey('pw', 'alex@example.com');
   const want = await pbkdf2Sha512(utf8('pw'), utf8('alex@example.com'), 600000, 32);
   assert.deepEqual(got, want);
+});
+
+test('deriveMasterKey(pw,id) == deriveMasterKey(pw,id,"v1") and normalises identity', async () => {
+  const a = await deriveMasterKey('correct horse', 'ALEX@EXAMPLE.com ');
+  const b = await deriveMasterKey('correct horse', 'ALEX@EXAMPLE.com ', 'v1');
+  assert.deepEqual(a, b);
+  const { pbkdf2Sha512 } = await import('../src/webcrypto.js');
+  const { utf8 } = await import('../src/encoding.js');
+  const want = await pbkdf2Sha512(utf8('correct horse'), utf8('alex@example.com'), 600000, 32);
+  assert.deepEqual(a, want);
+});
+
+test('deriveMasterKey rejects an unknown profile', async () => {
+  await assert.rejects(() => deriveMasterKey('pw', 'id', 'v2'), /unknown profile: v2/);
 });
