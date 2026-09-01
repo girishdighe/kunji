@@ -1,6 +1,7 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
-import { derivePassword, deriveMasterKey, computeKcv, PROFILE, PBKDF2_ITERATIONS } from '../src/derive.js';
-import { bytesToHex } from '../src/encoding.js';
+import { derivePassword, deriveMasterKey, computeKcv, PROFILE, PBKDF2_ITERATIONS, normaliseInput } from '../src/derive.js';
+import { bytesToHex, utf8 } from '../src/encoding.js';
+import { pbkdf2Sha512 } from '../src/webcrypto.js';
 
 // The `cases` array uses a small iteration count so the pipeline SHAPE (HKDF
 // salt/info, keystream labels, rejection sampling, class order, charsets, KCV)
@@ -24,12 +25,12 @@ const cases = [
 
 const out = { profile: PROFILE, iterations: ITER, cases: [] };
 for (const c of cases) {
-  const mk = await deriveMasterKey(c.passphrase, c.identity, ITER);
+  const mk = await pbkdf2Sha512(utf8(c.passphrase), utf8(normaliseInput(c.identity)), ITER, 32);
   out.cases.push({
     input: c,
     masterKeyHex: bytesToHex(mk),
     kcv: await computeKcv(mk),
-    password: await derivePassword({ ...c, iterations: ITER }),
+    password: await derivePassword({ ...c, masterKey: mk }),
   });
 }
 
@@ -38,7 +39,7 @@ const highInput = {
   identity: 'alex@example.com', passphrase: 'correct horse battery staple',
   site: 'github.com', account: 'alex', counter: 1, rules: 'standard', length: 20,
 };
-const highMk = await deriveMasterKey(highInput.passphrase, highInput.identity, PBKDF2_ITERATIONS);
+const highMk = await deriveMasterKey(highInput.passphrase, highInput.identity);
 out.highCost = {
   iterations: PBKDF2_ITERATIONS,
   input: highInput,

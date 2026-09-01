@@ -182,9 +182,10 @@ export async function derivePassword(params) {
   const charset = CHARSETS[rules];
   if (!charset) throw new Error(`unknown rules: ${rules}`);
 
+  const profile = params.profile ?? DEFAULT_PROFILE;
   const masterKey = params.masterKey
     ? params.masterKey
-    : await deriveMasterKey(params.passphrase, params.identity ?? '');
+    : await deriveMasterKey(params.passphrase, params.identity ?? '', profile);
 
   const entrySeed = await deriveEntrySeed(masterKey, { site, account, counter, rules, length });
   const raw = await generateChars(entrySeed, charset, length);

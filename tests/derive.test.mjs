@@ -347,3 +347,19 @@ test('deriveMasterKey(pw,id) == deriveMasterKey(pw,id,"v1") and normalises ident
 test('deriveMasterKey rejects an unknown profile', async () => {
   await assert.rejects(() => deriveMasterKey('pw', 'id', 'v2'), /unknown profile: v2/);
 });
+
+test('derivePassword with no profile == profile "v1"', async () => {
+  const input = { identity: 'alex@example.com', passphrase: 'correct horse battery staple',
+    site: 'github.com', account: 'alex', counter: 1, rules: 'standard', length: 20 };
+  const a = await derivePassword({ ...input });
+  const b = await derivePassword({ ...input, profile: 'v1' });
+  assert.equal(a, b);
+  assert.equal(a.length, 20);
+});
+
+test('derivePassword rejects an unknown profile', async () => {
+  await assert.rejects(
+    () => derivePassword({ identity: 'x', passphrase: 'y', site: 's', account: 'a', profile: 'v2' }),
+    /unknown profile: v2/,
+  );
+});
