@@ -40,7 +40,10 @@ function initGenerateTab() {
   }
 
   function pickRow(entry) {
-    const target = resolveEntryForPick(vaultBridge.forSite(site.value), entry);
+    // For an sso pick, resolve against the entries at its via-site (the current
+    // `site` field still holds the sso entry's own site, not the target's).
+    const lookupSite = entry.type === 'sso' ? ((entry.via && entry.via.site) || '') : site.value;
+    const target = resolveEntryForPick(vaultBridge.forSite(lookupSite), entry);
     if (entry.type === 'sso') {
       if (target) {
         site.value = target.site;
