@@ -257,7 +257,7 @@ this device", and even then only as `identityHint` for prefill convenience.
       "length": 20,
       "rules": "standard",
       "notes": "",
-      "totp": null,                 // optional base32 secret string
+      "totp": null,
       "recoveryCodes": [],          // optional array of strings
       "updatedAt": "2026-09-01T00:00:00Z"
     },
@@ -280,6 +280,11 @@ this device", and even then only as `identityHint` for prefill convenience.
   }
 }
 ```
+
+`totp` is `null`, a bare base32 string (legacy), or
+`{ secret, algorithm: "SHA-1"|"SHA-256"|"SHA-512", digits, period }`. The loader
+folds the first two forms into the object form (`normaliseTotp`); no `format`/`v`
+bump — reading old data needs no migration.
 
 An entry object is either a full entry or a tombstone
 `{ id, deleted: true, updatedAt }`. Tombstones are kept permanently (they are how

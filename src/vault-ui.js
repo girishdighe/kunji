@@ -866,7 +866,8 @@ function initVaultTab() {
             </div>
             <div class="field"><input id="edCounter" type="text" inputmode="numeric" placeholder=" " value="${esc(e.counter ?? 1)}"><label for="edCounter">Counter</label></div>
           </div>
-          <div class="field"><input id="edTotp" type="text" autocomplete="off" spellcheck="false" placeholder=" " value="${esc(e.totp ?? '')}"><label for="edTotp">TOTP secret (optional)</label></div>
+          <div class="field"><input id="edTotp" type="text" autocomplete="off" spellcheck="false" placeholder=" " value="${esc(e.totp ? e.totp.secret : '')}"><label for="edTotp">TOTP secret or otpauth:// URI (optional)</label></div>
+          <div class="v-foot" id="edTotpHint"></div>
           <div class="field"><textarea id="edCodes" rows="3" placeholder=" ">${esc((e.recoveryCodes || []).join('\n'))}</textarea><label for="edCodes">Recovery codes (one per line)</label></div>
         </div>
         <div id="edSsoFields" ${isSso ? '' : 'hidden'}>
@@ -925,7 +926,12 @@ function initVaultTab() {
           type: 'password', name, site, account,
           length, counter, rules: panel.querySelector('#edRules').value,
           profile: 'v1',
-          totp: panel.querySelector('#edTotp').value.trim() || null,
+          totp: (() => {
+            const raw = panel.querySelector('#edTotp').value.trim();
+            if (!raw) return null;
+            const parsed = parseOtpauth(raw);
+            return normaliseTotp(parsed || raw);
+          })(),
           recoveryCodes: panel.querySelector('#edCodes').value.split('\n').map((s) => s.trim()).filter(Boolean),
           notes: panel.querySelector('#edNotes').value,
         };
@@ -955,6 +961,18 @@ function initVaultTab() {
       markDirty();
       render();
     });
+
+    const edTotp = panel.querySelector('#edTotp');
+    const edTotpHint = panel.querySelector('#edTotpHint');
+    if (edTotp && edTotpHint) {
+      const checkTotp = () => {
+        const raw = edTotp.value.trim();
+        if (!raw || raw.startsWith('otpauth://')) { edTotpHint.textContent = ''; return; }
+        edTotpHint.textContent = /^[A-Za-z2-7= ]+$/.test(raw) ? '' : 'that does not look like a base32 secret';
+      };
+      edTotp.addEventListener('input', checkTotp);
+      checkTotp();
+    }
   }
 
   window.addEventListener('beforeunload', (e) => {

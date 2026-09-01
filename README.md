@@ -70,6 +70,9 @@ the file gives no sign that a real decoy exists.
 Two devices with no shared file-sync can move a vault by QR: **Show as QR** on
 one, **Scan QR…** on the other. Large vaults animate across several frames.
 
+An entry with a TOTP secret (paste the base32 or an `otpauth://` URI) shows the
+live 6-digit 2FA code and a countdown in its detail view.
+
 ## The v1 profile is frozen
 
 `tests/vectors/v1.json` locks the derivation output. Any code change that alters a
