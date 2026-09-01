@@ -221,8 +221,6 @@ function initVaultTab() {
       prevRevision,
       writerId,
     });
-    loadedEnvelope = parseEnvelope(text); // adopt the new revision/updatedAt
-    dirty = false;
     const blob = new Blob([text], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -232,6 +230,11 @@ function initVaultTab() {
     a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+    // Adopt the new revision/updatedAt and clear dirty only after the download
+    // has been handed off, so a blocked download leaves the dirty bar and the
+    // beforeunload guard in place (spec section 6).
+    loadedEnvelope = parseEnvelope(text);
+    dirty = false;
     if (!sessionMoveNoteShown) {
       sessionMoveNoteShown = true;
       alert('Saved as kunji-data.json in your downloads. Move it to wherever your sync watches, and overwrite the previous copy.');
@@ -506,7 +509,14 @@ function initVaultTab() {
       if (dup && !confirm('An entry for this site and account already exists. Save anyway?')) return;
 
       if (existing) {
-        vault = updateEntry(vault, existing.id, patch);
+        if (existing.type === type) {
+          vault = updateEntry(vault, existing.id, patch);
+        } else {
+          // Type changed: rebuild the entry from scratch so no fields from the
+          // old type (counter/rules/totp/recoveryCodes, or a stale via) linger.
+          const rebuilt = { ...makeEntry(patch), id: existing.id, updatedAt: new Date().toISOString() };
+          vault = { ...vault, entries: vault.entries.map((x) => (x.id === existing.id ? rebuilt : x)) };
+        }
         selectedId = existing.id;
         view = 'detail';
       } else {

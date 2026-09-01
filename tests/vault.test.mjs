@@ -205,3 +205,40 @@ test('frozen decrypt vector: fixed vaultKey/iv/ct/aad -> known plaintext', async
   const plain = await aesGcmDecrypt(vaultKey, iv, ct, u('kunji-vault-v1'));
   assert.equal(f(plain), '{"entries":[],"settings":{}}');
 });
+
+test('parseEnvelope rejects a missing or malformed decoy section', () => {
+  const base = { format: 'kunji-data', v: 1, kcv: 'x', iv: 'y', ct: 'z' };
+  assert.throws(() => parseEnvelope(JSON.stringify(base)), BadEnvelopeError);
+  assert.throws(() => parseEnvelope(JSON.stringify({ ...base, decoy: {} })), BadEnvelopeError);
+  assert.throws(() => parseEnvelope(JSON.stringify({ ...base, decoy: { kcv: 'a', iv: 'b' } })), BadEnvelopeError);
+  assert.throws(() => parseEnvelope(JSON.stringify({ ...base, decoy: { kcv: 1, iv: 'b', ct: 'c' } })), BadEnvelopeError);
+});
+
+// An envelope that clears the KCV gate and decrypts cleanly to `plaintextBytes`,
+// so unlockVault reaches its JSON.parse / shape-check stage.
+async function envelopeDecryptingTo(plaintextBytes) {
+  const { aesGcmEncrypt } = await import('../src/webcrypto.js');
+  const vaultKey = await deriveVaultKey(MK);
+  const iv = new Uint8Array(12);
+  const ct = await aesGcmEncrypt(vaultKey, iv, plaintextBytes, VAULT_AAD);
+  return {
+    format: 'kunji-data',
+    v: 1,
+    kcv: await computeKcv(MK),
+    iv: Buffer.from(iv).toString('base64'),
+    ct: Buffer.from(ct).toString('base64'),
+    decoy: { kcv: 'AAAA', iv: 'AAAA', ct: 'AAAA' },
+  };
+}
+
+test('unlockVault throws CorruptVaultError when the decrypted plaintext is not JSON', async () => {
+  const { utf8: u } = await import('../src/encoding.js');
+  const env = await envelopeDecryptingTo(u('this is not json'));
+  await assert.rejects(() => unlockVault(env, { masterKey: MK }), CorruptVaultError);
+});
+
+test('unlockVault throws CorruptVaultError when the plaintext JSON has the wrong shape', async () => {
+  const { utf8: u } = await import('../src/encoding.js');
+  const env = await envelopeDecryptingTo(u('{"entries":"nope","settings":{}}'));
+  await assert.rejects(() => unlockVault(env, { masterKey: MK }), CorruptVaultError);
+});
