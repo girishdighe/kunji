@@ -1,5 +1,5 @@
 import { utf8, bytesToBase64, base64ToBytes, fromUtf8 } from './encoding.js';
-import { aesGcmEncrypt, aesGcmDecrypt } from './webcrypto.js';
+import { aesGcmEncrypt, aesGcmDecrypt, hkdfSha256 } from './webcrypto.js';
 import { deriveVaultKey, computeKcv, PBKDF2_ITERATIONS, normaliseInput, PROFILES } from './derive.js';
 
 export const VAULT_FORMAT = 'kunji-data';
@@ -35,6 +35,26 @@ export function newDecoyBytes(ctLen) {
     iv: bytesToBase64(randomBytes(12)),
     ct: bytesToBase64(randomBytes(ctLen)),
   };
+}
+
+const PASSKEY_AAD = utf8('kunji-passkey-v1');
+
+async function passkeyWrapKey(prfSecret) {
+  return hkdfSha256(prfSecret, utf8('kunji/v1'), utf8('passkey-wrap'), 32);
+}
+
+// masterKey, prfSecret: Uint8Array(32). Returns { iv: Uint8Array(12), ct: Uint8Array }.
+export async function wrapMasterKey(masterKey, prfSecret) {
+  const key = await passkeyWrapKey(prfSecret);
+  const iv = randomBytes(12);
+  const ct = await aesGcmEncrypt(key, iv, masterKey, PASSKEY_AAD);
+  return { iv, ct };
+}
+
+// { iv, ct }: Uint8Array. Throws on tag failure.
+export async function unwrapMasterKey({ iv, ct }, prfSecret) {
+  const key = await passkeyWrapKey(prfSecret);
+  return aesGcmDecrypt(key, iv, ct, PASSKEY_AAD);
 }
 
 export function createVault() {

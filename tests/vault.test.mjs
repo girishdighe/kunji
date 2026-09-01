@@ -638,3 +638,28 @@ test('a totp object round-trips through encodeEnvelope/openVault', async () => {
   assert.deepEqual(back.entries[0].totp,
     { secret: 'ABCDEF', algorithm: 'SHA-1', digits: 6, period: 30 });
 });
+
+import { wrapMasterKey, unwrapMasterKey } from '../src/vault.js';
+
+test('wrap then unwrap round-trips a 32-byte key', async () => {
+  const mk = crypto.getRandomValues(new Uint8Array(32));
+  const prf = crypto.getRandomValues(new Uint8Array(32));
+  const wrapped = await wrapMasterKey(mk, prf);
+  assert.equal(wrapped.iv.length, 12);
+  assert.ok(wrapped.ct.length >= 32 + 16);
+  assert.deepEqual(await unwrapMasterKey(wrapped, prf), mk);
+});
+
+test('unwrap with the wrong PRF secret throws, never returns garbage', async () => {
+  const mk = crypto.getRandomValues(new Uint8Array(32));
+  const wrapped = await wrapMasterKey(mk, new Uint8Array(32).fill(1));
+  await assert.rejects(() => unwrapMasterKey(wrapped, new Uint8Array(32).fill(2)));
+});
+
+test('wrap uses a fresh IV each call', async () => {
+  const mk = new Uint8Array(32);
+  const prf = new Uint8Array(32).fill(7);
+  const a = await wrapMasterKey(mk, prf);
+  const b = await wrapMasterKey(mk, prf);
+  assert.notDeepEqual([...a.iv], [...b.iv]);
+});
