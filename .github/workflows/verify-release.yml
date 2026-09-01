@@ -14,10 +14,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.ref }}
+          fetch-depth: 0
           fetch-tags: true
 
       - name: Tag is signed by an allowed signer
         run: |
+          git config gpg.format ssh
           git config gpg.ssh.allowedSignersFile "$GITHUB_WORKSPACE/allowed_signers"
           git verify-tag "$GITHUB_REF_NAME"
 
