@@ -206,3 +206,9 @@ select option { background: var(--surface); color: var(--text); }
 }
 .v-slot-toggle button[aria-pressed="true"] { color: var(--text); border-color: var(--blue); }
 .v-decoy-setup { border-top: 1px solid #1a1c1f; margin-top: 12px; padding-top: 10px; }
+
+/* Sync merge (Phase 3d) */
+.v-merge-head { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+.v-merge-row { display: flex; justify-content: space-between; padding: 9px 0; border-top: 1px solid #1a1c1f; cursor: pointer; }
+.v-merge-row .n { color: var(--muted); }
+.v-merge-detail { font-size: 12px; color: var(--muted); padding: 4px 0 8px 10px; }

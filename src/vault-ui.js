@@ -30,6 +30,8 @@ function initVaultTab() {
   let decoyMasterKey = null;       // Uint8Array while a decoy is held this session
   let realVault = null;            // stash of the real pair while activeSlot === 'decoy'
   let realMasterKey = null;
+  let mergedFromRevision = null;   // set after Apply merge; base for the next save's revision
+  let pendingImport = null;        // { env, vault } awaiting a merge/replace decision
 
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]
@@ -118,6 +120,8 @@ function initVaultTab() {
     decoyMasterKey = null;
     realVault = null;
     realMasterKey = null;
+    mergedFromRevision = null;
+    pendingImport = null;
   }
 
   function render() {
@@ -146,17 +150,49 @@ function initVaultTab() {
   async function onFilePicked(ev) {
     const file = ev.target.files && ev.target.files[0];
     if (!file) return;
-    const errEl = panel.querySelector('#vError');
+    const errEl = panel.querySelector('#vError') || panel.querySelector('#vlError') || panel.querySelector('#vListError');
+    let env;
     try {
-      const text = await file.text();
-      loadedEnvelope = parseEnvelope(text);
-      identityHintOn = typeof loadedEnvelope.identityHint === 'string';
+      env = parseEnvelope(await file.text());
+    } catch (e) {
+      if (errEl) errEl.textContent = e && e.name === 'BadEnvelopeError'
+        ? 'That does not look like a Kunji vault file.' : 'Could not read that file.';
+      return;
+    }
+    if (state !== 'UNLOCKED') {
+      loadedEnvelope = env;
+      identityHintOn = typeof env.identityHint === 'string';
       state = 'LOCKED';
       render();
-    } catch (e) {
-      errEl.textContent = e && e.name === 'BadEnvelopeError'
-        ? 'That does not look like a Kunji vault file.'
-        : 'Could not read that file.';
+      return;
+    }
+    // UNLOCKED: compare with the loaded vault using the current key
+    let inVault;
+    try {
+      inVault = await unlockVault(env, { masterKey });
+    } catch {
+      if (!confirm('That file uses a different passphrase — replace the open vault and re-unlock it?')) return;
+      loadedEnvelope = env; wipe(); state = 'LOCKED'; render();
+      return;
+    }
+    const verdict = classifyIncoming(loadedEnvelope, vault, env, inVault);
+    if (verdict === 'same') { alert('That copy has nothing new.'); return; }
+    if (verdict === 'fast-forward') {
+      if (!confirm(`That copy is newer (rev ${env.revision}) and already has everything you do. Use it?`)) return;
+      loadedEnvelope = env; vault = { entries: inVault.entries, settings: inVault.settings };
+      dirty = true; mergedFromRevision = env.revision;
+      vaultBridge && vaultBridge.publish && vaultBridge.publish(visibleEntries(vault));
+      view = 'list'; render();
+      return;
+    }
+    // diverged
+    const choice = prompt(`That copy (rev ${env.revision}) and yours (rev ${loadedEnvelope.revision}) both have changes.\nType "merge" to merge, "replace" to take that copy, anything else to cancel.`);
+    if (choice === 'merge') { renderMerge(env, inVault); return; }
+    if (choice === 'replace') {
+      loadedEnvelope = env; vault = { entries: inVault.entries, settings: inVault.settings };
+      dirty = true; mergedFromRevision = env.revision;
+      vaultBridge && vaultBridge.publish && vaultBridge.publish(visibleEntries(vault));
+      view = 'list'; render();
     }
   }
 
@@ -452,7 +488,8 @@ function initVaultTab() {
           <button id="vSlotReal" type="button" aria-pressed="${activeSlot === 'real'}">Real vault</button>
           <button id="vSlotDecoy" type="button" aria-pressed="${activeSlot === 'decoy'}">Decoy</button>
         </div>` : ''}
-      <div class="v-foot"><button class="link-btn" id="vSave" type="button">Save vault</button> &middot; <button class="link-btn" id="vLock" type="button">Lock</button> &middot; <span id="vIdleCountdown"></span></div>
+      <div class="v-foot"><button class="link-btn" id="vSave" type="button">Save vault</button> &middot; <button class="link-btn" id="vLock" type="button">Lock</button> &middot; <span id="vIdleCountdown"></span> &middot; <button class="link-btn" id="vMerge" type="button">Merge another copy&hellip;</button>
+      <input type="file" id="vMergeInput" accept=".json,application/json" hidden></div>
       <label class="v-foot" style="display:block"><input type="checkbox" id="vHint" ${identityHintOn ? 'checked' : ''}> Prefill identity on devices that open this file <span class="v-danger">(anyone with the file can read it)</span></label>
       ${unlockedSlot === 'real' && activeSlot === 'real' ? `
         <div class="v-decoy-setup">
@@ -481,6 +518,8 @@ function initVaultTab() {
       if (dirty && !confirm('Discard unsaved changes and lock?')) return;
       lock();
     });
+    panel.querySelector('#vMerge').addEventListener('click', () => panel.querySelector('#vMergeInput').click());
+    panel.querySelector('#vMergeInput').addEventListener('change', onFilePicked);
     if (panel.querySelector('#vSlotReal')) panel.querySelector('#vSlotReal').addEventListener('click', () => useSlot('real'));
     if (panel.querySelector('#vSlotDecoy')) panel.querySelector('#vSlotDecoy').addEventListener('click', () => useSlot('decoy'));
     if (panel.querySelector('#vDecoySetup')) panel.querySelector('#vDecoySetup').addEventListener('click', () => decoyPrompt('create'));
@@ -490,6 +529,45 @@ function initVaultTab() {
       decoyVault = null; decoyMasterKey = null;
       if (activeSlot === 'decoy') { activeSlot = 'real'; vault = realVault; masterKey = realMasterKey; }
       markDirty(); render();
+    });
+  }
+
+  function renderMerge(inEnv, inVault) {
+    const localMeta = { ...vault, revision: loadedEnvelope ? loadedEnvelope.revision : 0, lastWriter: loadedEnvelope ? loadedEnvelope.lastWriter : '' };
+    const inMeta = { ...inVault, revision: inEnv.revision, lastWriter: inEnv.lastWriter };
+    const { vault: merged, summary } = mergeVaults(localMeta, inMeta);
+    const nameOf = (id) => {
+      const e = merged.entries.find((x) => x.id === id) || vault.entries.find((x) => x.id === id) || {};
+      return e.name || `(${id.slice(0, 8)})`;
+    };
+    const bucket = (label, ids) => `
+      <div class="v-merge-row" data-ids='${JSON.stringify(ids)}'>
+        <span>${label}</span><span class="n">${ids.length} &rsaquo;</span>
+      </div>
+      <div class="v-merge-detail" hidden>${ids.map(nameOf).map(esc).join('<br>') || '—'}</div>`;
+    panel.innerHTML = `
+      <div class="v-bar"><button class="link-btn" id="mgCancel" type="button">&lsaquo; Cancel</button><button class="link-btn" id="mgApply" type="button">Apply merge</button></div>
+      <div class="v-merge-head">Merging rev ${inEnv.revision} into your rev ${loadedEnvelope ? loadedEnvelope.revision : 0}</div>
+      ${bucket('Added from that copy', summary.added)}
+      ${bucket('Updated (newer wins)', summary.updated)}
+      ${bucket('Deleted by that copy', summary.deletedByRemote)}
+      ${bucket('Deleted here (kept deleted)', summary.deletedByLocal)}
+      <div class="v-merge-row"><span>Unchanged</span><span class="n">${summary.unchanged}</span></div>
+    `;
+    panel.querySelectorAll('.v-merge-row[data-ids]').forEach((row) => {
+      row.addEventListener('click', () => {
+        const d = row.nextElementSibling;
+        if (d && d.classList.contains('v-merge-detail')) d.hidden = !d.hidden;
+      });
+    });
+    panel.querySelector('#mgCancel').addEventListener('click', () => { view = 'list'; render(); });
+    panel.querySelector('#mgApply').addEventListener('click', () => {
+      vault = { entries: merged.entries, settings: merged.settings };
+      dirty = true;
+      mergedFromRevision = Math.max(loadedEnvelope ? loadedEnvelope.revision : 0, inEnv.revision);
+      vaultBridge && vaultBridge.publish && vaultBridge.publish(visibleEntries(vault));
+      view = 'list';
+      render();
     });
   }
 
