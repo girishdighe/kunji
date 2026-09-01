@@ -40,19 +40,50 @@ function initGenerateTab() {
   }
 
   function pickRow(entry) {
-    // password path only in this task; sso handled in Task 6
-    account.value = entry.account;
-    lengthEl.value = String(entry.length ?? 20);
-    rulesEl.value = entry.rules ?? 'standard';
-    pickedEntry = { counter: entry.counter ?? 1, rules: rulesEl.value, length: parseInt(lengthEl.value, 10) };
-    account.parentElement.classList.add('picked');
-    if (!account.parentElement.querySelector('.pick-clear')) {
-      const x = document.createElement('button');
+    const target = resolveEntryForPick(vaultBridge.forSite(site.value), entry);
+    if (entry.type === 'sso') {
+      if (target) {
+        site.value = target.site;
+        account.value = target.account;
+        lengthEl.value = String(target.length ?? 20);
+        rulesEl.value = target.rules ?? 'standard';
+        pickedEntry = { counter: target.counter ?? 1, rules: rulesEl.value, length: parseInt(lengthEl.value, 10) };
+        setPickNote('Via ' + (entry.site || entry.name) + ' — this is your ' + target.site + ' password.');
+      } else {
+        site.value = (entry.via && entry.via.site) || '';
+        account.value = (entry.via && entry.via.account) || '';
+        pickedEntry = null;
+        setPickNote('Linked ' + ((entry.via && entry.via.site) || 'entry') + ' not in vault — using defaults.');
+      }
+    } else {
+      account.value = entry.account;
+      lengthEl.value = String(entry.length ?? 20);
+      rulesEl.value = entry.rules ?? 'standard';
+      pickedEntry = { counter: entry.counter ?? 1, rules: rulesEl.value, length: parseInt(lengthEl.value, 10) };
+      maybeKcvHint();
+    }
+    account.parentElement.classList.toggle('picked', !!pickedEntry);
+    let x = account.parentElement.querySelector('.pick-clear');
+    if (pickedEntry && !x) {
+      x = document.createElement('button');
       x.type = 'button'; x.className = 'pick-clear'; x.textContent = '✕';
       x.addEventListener('click', () => { clearPick(); renderGenPicker(); });
       account.parentElement.appendChild(x);
+    } else if (!pickedEntry && x) {
+      x.remove();
     }
     renderGenPicker();
+  }
+
+  function setPickNote(text) {
+    genPickNote.textContent = text;
+    genPickNote.hidden = false;
+  }
+
+  function maybeKcvHint() {
+    if (pickedEntry && kcv.dataset.state !== 'ok') {
+      setPickNote('Verify your passphrase above to match your vault.');
+    }
   }
 
   function renderGenPicker() {
@@ -135,7 +166,8 @@ function initGenerateTab() {
     generateBtn.disabled = true;
     generateBtn.textContent = 'Generating...';
     try {
-      const params = { site: site.value, account: account.value, counter: 1, rules, length };
+      const counter = pickedEntry ? (pickedEntry.counter || 1) : 1;
+      const params = { site: site.value, account: account.value, counter, rules, length };
       if (mkCache.key && mkCache.id === identity.value && mkCache.pw === master.value) {
         params.masterKey = mkCache.key;
       } else {
@@ -151,7 +183,7 @@ function initGenerateTab() {
       output.textContent = output.dataset.masked;
       resultLabel.textContent = 'Password for ' + site.value.trim().toLowerCase();
       const size = ({ 'standard': 74, 'letters-digits': 62, 'max-symbols': 84 })[rules];
-      entropyEl.textContent = estimateEntropyBits(length, size) + ' bits of entropy. Unique to this site and counter 1.';
+      entropyEl.textContent = estimateEntropyBits(length, size) + ' bits of entropy. Unique to this site and counter ' + counter + '.';
     } catch (e) {
       errorEl.textContent = e.message;
     } finally {
