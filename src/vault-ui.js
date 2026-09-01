@@ -389,6 +389,121 @@ function initVaultTab() {
     });
   }
 
+  function renderEditor() {
+    const existing = selectedEntry(); // null when creating
+    const e = existing || makeEntry({ type: 'password' });
+    const isSso = e.type === 'sso';
+
+    panel.innerHTML = `
+      <div class="v-bar"><button class="link-btn" id="edCancel" type="button">&lsaquo; Cancel</button><button class="link-btn" id="edDone" type="button">Done</button></div>
+      <div class="fields">
+        <div class="field"><input id="edName" type="text" autocomplete="off" spellcheck="false" placeholder=" " value="${esc(e.name)}"><label for="edName">Name</label></div>
+        <div class="field select-wrap">
+          <select id="edType">
+            <option value="password" ${isSso ? '' : 'selected'}>password</option>
+            <option value="sso" ${isSso ? 'selected' : ''}>sso</option>
+          </select>
+          <label for="edType">Type</label>
+        </div>
+        <div class="field"><input id="edSite" type="text" autocomplete="off" spellcheck="false" placeholder=" " value="${esc(e.site)}"><label for="edSite">Site or app</label></div>
+        <div class="field"><input id="edAccount" type="text" autocomplete="off" spellcheck="false" placeholder=" " value="${esc(e.account)}"><label for="edAccount">Account</label></div>
+        <div id="edPwFields" ${isSso ? 'hidden' : ''}>
+          <div class="v-editrow">
+            <div class="field"><input id="edLength" type="text" inputmode="numeric" placeholder=" " value="${esc(e.length ?? 20)}"><label for="edLength">Length</label></div>
+            <div class="field select-wrap">
+              <select id="edRules">
+                <option value="standard" ${e.rules === 'letters-digits' || e.rules === 'max-symbols' ? '' : 'selected'}>standard</option>
+                <option value="letters-digits" ${e.rules === 'letters-digits' ? 'selected' : ''}>letters-digits</option>
+                <option value="max-symbols" ${e.rules === 'max-symbols' ? 'selected' : ''}>max-symbols</option>
+              </select>
+              <label for="edRules">Rules</label>
+            </div>
+            <div class="field"><input id="edCounter" type="text" inputmode="numeric" placeholder=" " value="${esc(e.counter ?? 1)}"><label for="edCounter">Counter</label></div>
+          </div>
+          <div class="field"><input id="edTotp" type="text" autocomplete="off" spellcheck="false" placeholder=" " value="${esc(e.totp ?? '')}"><label for="edTotp">TOTP secret (optional)</label></div>
+          <div class="field"><textarea id="edCodes" rows="3" placeholder=" ">${esc((e.recoveryCodes || []).join('\n'))}</textarea><label for="edCodes">Recovery codes (one per line)</label></div>
+        </div>
+        <div id="edSsoFields" ${isSso ? '' : 'hidden'}>
+          <div class="field"><input id="edViaSite" type="text" autocomplete="off" spellcheck="false" placeholder=" " value="${esc(e.via && e.via.site)}"><label for="edViaSite">Log in via — site</label></div>
+          <div class="field"><input id="edViaAccount" type="text" autocomplete="off" spellcheck="false" placeholder=" " value="${esc(e.via && e.via.account)}"><label for="edViaAccount">Log in via — account</label></div>
+        </div>
+        <div class="field"><textarea id="edNotes" rows="2" placeholder=" ">${esc(e.notes)}</textarea><label for="edNotes">Notes</label></div>
+      </div>
+      ${existing ? '<div class="v-center-link"><button class="link-btn v-danger" id="edDelete" type="button">Delete entry</button></div>' : ''}
+      <div class="error" id="edError"></div>
+    `;
+
+    const typeSel = panel.querySelector('#edType');
+    typeSel.addEventListener('change', () => {
+      const sso = typeSel.value === 'sso';
+      panel.querySelector('#edPwFields').hidden = sso;
+      panel.querySelector('#edSsoFields').hidden = !sso;
+    });
+
+    panel.querySelector('#edCancel').addEventListener('click', () => {
+      view = existing ? 'detail' : 'list'; render();
+    });
+
+    if (existing) panel.querySelector('#edDelete').addEventListener('click', () => {
+      if (!confirm('Delete this entry?')) return;
+      vault = removeEntry(vault, existing.id);
+      markDirty();
+      selectedId = null; view = 'list'; render();
+    });
+
+    panel.querySelector('#edDone').addEventListener('click', () => {
+      const errEl = panel.querySelector('#edError');
+      errEl.textContent = '';
+      const type = typeSel.value;
+      const name = panel.querySelector('#edName').value.trim();
+      const site = panel.querySelector('#edSite').value.trim();
+      const account = panel.querySelector('#edAccount').value.trim();
+      if (!name || !site || !account) { errEl.textContent = 'Name, site, and account are required.'; return; }
+
+      let patch;
+      if (type === 'sso') {
+        patch = {
+          type: 'sso', name, site, account,
+          via: {
+            site: panel.querySelector('#edViaSite').value.trim(),
+            account: panel.querySelector('#edViaAccount').value.trim(),
+          },
+          notes: panel.querySelector('#edNotes').value,
+        };
+      } else {
+        const length = parseInt(panel.querySelector('#edLength').value, 10);
+        const counter = parseInt(panel.querySelector('#edCounter').value, 10);
+        if (!Number.isInteger(length) || length < 8 || length > 64) { errEl.textContent = 'Length must be a whole number from 8 to 64.'; return; }
+        if (!Number.isInteger(counter) || counter < 1) { errEl.textContent = 'Counter must be a whole number of at least 1.'; return; }
+        patch = {
+          type: 'password', name, site, account,
+          length, counter, rules: panel.querySelector('#edRules').value,
+          profile: 'v1',
+          totp: panel.querySelector('#edTotp').value.trim() || null,
+          recoveryCodes: panel.querySelector('#edCodes').value.split('\n').map((s) => s.trim()).filter(Boolean),
+          notes: panel.querySelector('#edNotes').value,
+        };
+      }
+
+      const dup = vault.entries.find((x) => x.id !== (existing && existing.id)
+        && x.site.toLowerCase() === site.toLowerCase()
+        && x.account.toLowerCase() === account.toLowerCase());
+      if (dup && !confirm('An entry for this site and account already exists. Save anyway?')) return;
+
+      if (existing) {
+        vault = updateEntry(vault, existing.id, patch);
+        selectedId = existing.id;
+        view = 'detail';
+      } else {
+        vault = addEntry(vault, patch);
+        selectedId = vault.entries[vault.entries.length - 1].id;
+        view = 'detail';
+      }
+      markDirty();
+      render();
+    });
+  }
+
   window.addEventListener('beforeunload', (e) => {
     if (dirty) { e.preventDefault(); e.returnValue = ''; }
   });
