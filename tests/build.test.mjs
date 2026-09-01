@@ -21,3 +21,12 @@ test('build produces dist/kunji.html with no module keywords or network refs', (
 test('check-invariants exits 0 on clean tree', () => {
   execFileSync('node', ['tools/check-invariants.mjs'], { stdio: 'pipe' });
 });
+
+test('built html inlines the vault modules', () => {
+  execFileSync('node', ['tools/build.mjs'], { stdio: 'pipe' });
+  const html = readFileSync('dist/kunji.html', 'utf8');
+  assert.ok(html.includes('==== src/vault.js ===='), 'vault.js concatenated');
+  assert.ok(html.includes('==== src/vault-ui.js ===='), 'vault-ui.js concatenated');
+  assert.ok(html.indexOf('src/vault.js') < html.indexOf('src/app.js'), 'vault.js before app.js');
+  assert.ok(html.indexOf('src/app.js') < html.indexOf('src/vault-ui.js'), 'vault-ui.js last');
+});

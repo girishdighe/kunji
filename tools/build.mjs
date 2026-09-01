@@ -1,11 +1,13 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 
-// Explicit dependency order. encoding -> webcrypto -> derive -> app.
+// Explicit dependency order. encoding -> webcrypto -> derive -> vault -> app -> vault-ui.
 const JS_ORDER = [
   'src/encoding.js',
   'src/webcrypto.js',
   'src/derive.js',
+  'src/vault.js',
   'src/app.js',
+  'src/vault-ui.js',
 ];
 
 function stripModuleSyntax(js) {
