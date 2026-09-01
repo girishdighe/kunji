@@ -601,3 +601,40 @@ test('classifyIncoming: diverged when each side has a unique change', () => {
   const incoming = vault([ent({ id: '1' }), ent({ id: 'R', name: 'remote-only' })], 4);
   assert.equal(classifyIncoming(envOf('K', 3), local, envOf('K', 4), incoming), 'diverged');
 });
+
+import { normaliseTotp } from '../src/vault.js';
+
+test('normaliseTotp folds string / object / null into the object form', () => {
+  assert.equal(normaliseTotp(null), null);
+  assert.equal(normaliseTotp(''), null);
+  assert.equal(normaliseTotp('  '), null);
+  assert.deepEqual(normaliseTotp('JBSW Y3DP'),
+    { secret: 'JBSWY3DP', algorithm: 'SHA-1', digits: 6, period: 30 });
+  assert.deepEqual(normaliseTotp({ secret: 'ABC' }),
+    { secret: 'ABC', algorithm: 'SHA-1', digits: 6, period: 30 });
+  assert.deepEqual(normaliseTotp({ secret: 'ABC', algorithm: 'SHA-256', digits: 8, period: 60 }),
+    { secret: 'ABC', algorithm: 'SHA-256', digits: 8, period: 60 });
+});
+
+test('makeEntry stores the totp object form', () => {
+  assert.equal(makeEntry({ name: 'a', site: 's', account: 'x' }).totp, null);
+  assert.deepEqual(makeEntry({ name: 'a', site: 's', account: 'x', totp: 'ABCDEF' }).totp,
+    { secret: 'ABCDEF', algorithm: 'SHA-1', digits: 6, period: 30 });
+});
+
+test('updateEntry normalises a totp patch', () => {
+  let v = addEntry(createVault(), { name: 'a', site: 's', account: 'x' });
+  const id = v.entries[0].id;
+  v = updateEntry(v, id, { totp: 'GEZDGNBV' });
+  assert.deepEqual(v.entries[0].totp, { secret: 'GEZDGNBV', algorithm: 'SHA-1', digits: 6, period: 30 });
+  v = updateEntry(v, id, { totp: null });
+  assert.equal(v.entries[0].totp, null);
+});
+
+test('a totp object round-trips through encodeEnvelope/openVault', async () => {
+  let v = addEntry(createVault(), { name: 'a', site: 's', account: 'x', totp: 'ABCDEF' });
+  const text = await encodeEnvelope(v, { masterKey: MK, writerId: 'w' });
+  const back = await openVault(JSON.parse(text), { masterKey: MK });
+  assert.deepEqual(back.entries[0].totp,
+    { secret: 'ABCDEF', algorithm: 'SHA-1', digits: 6, period: 30 });
+});

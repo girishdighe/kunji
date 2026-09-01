@@ -50,6 +50,23 @@ export function createVault() {
   };
 }
 
+// A totp field is null, a bare base32 string (legacy), or
+// { secret, algorithm, digits, period }. Fold all into the object form or null.
+export function normaliseTotp(value) {
+  if (value == null) return null;
+  const raw = typeof value === 'string' ? { secret: value } : value;
+  const secret = String(raw.secret ?? '').replace(/\s+/g, '');
+  if (!secret) return null;
+  const A = { SHA1: 'SHA-1', SHA256: 'SHA-256', SHA512: 'SHA-512',
+    'SHA-1': 'SHA-1', 'SHA-256': 'SHA-256', 'SHA-512': 'SHA-512' };
+  return {
+    secret,
+    algorithm: A[String(raw.algorithm ?? 'SHA-1').toUpperCase()] || 'SHA-1',
+    digits: Number.isInteger(raw.digits) ? raw.digits : 6,
+    period: Number.isInteger(raw.period) && raw.period > 0 ? raw.period : 30,
+  };
+}
+
 export function makeEntry(partial) {
   // Both branches are built from named fields only — never `...partial` — so a
   // partial carrying fields for the other type (a stale `via`, or leftover
@@ -76,7 +93,7 @@ export function makeEntry(partial) {
     counter: partial.counter ?? 1,
     length: partial.length ?? 20,
     rules: partial.rules ?? 'standard',
-    totp: partial.totp ?? null,
+    totp: normaliseTotp(partial.totp),
     recoveryCodes: partial.recoveryCodes ?? [],
   };
 }
@@ -86,10 +103,11 @@ export function addEntry(vault, partial) {
 }
 
 export function updateEntry(vault, id, patch) {
+  const next = 'totp' in patch ? { ...patch, totp: normaliseTotp(patch.totp) } : patch;
   return {
     ...vault,
     entries: vault.entries.map((e) =>
-      e.id === id ? { ...e, ...patch, id: e.id, updatedAt: new Date().toISOString() } : e,
+      e.id === id ? { ...e, ...next, id: e.id, updatedAt: new Date().toISOString() } : e,
     ),
   };
 }
