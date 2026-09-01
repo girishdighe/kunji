@@ -187,3 +187,20 @@ export function resolveEntryForPick(entries, entry) {
     && typeof e.site === 'string' && typeof e.account === 'string'
     && normaliseInput(e.site) === viaSite && normaliseInput(e.account) === viaAccount) || null;
 }
+
+// --- Phase 3b: length-matching filler (pure) ---
+
+// Returns { ...obj, _pad } where `_pad` is a base64 string sized so that
+// utf8(JSON.stringify(result)).length === targetBytes exactly. Throws if `obj`
+// (with an empty _pad) already serialises to more than targetBytes. base64
+// characters are JSON-safe (no escaping), so one _pad char == one output byte.
+export function padPlaintextTo(obj, targetBytes) {
+  const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  const base = utf8(JSON.stringify({ ...obj, _pad: '' })).length;
+  const need = targetBytes - base;
+  if (need < 0) throw new Error(`padPlaintextTo: object is ${-need} bytes over target`);
+  let pad = '';
+  const r = randomBytes(need);
+  for (let i = 0; i < need; i++) pad += B64[r[i] & 63];
+  return { ...obj, _pad: pad };
+}

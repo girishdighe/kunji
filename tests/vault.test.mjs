@@ -321,3 +321,30 @@ test('resolveEntryForPick: sso with blank via returns null', () => {
   const news = SSO({ via: { site: '', account: '' } });
   assert.equal(resolveEntryForPick([news], news), null);
 });
+
+import { padPlaintextTo } from '../src/vault.js';
+import { utf8 as _utf8 } from '../src/encoding.js';
+
+test('padPlaintextTo makes JSON.stringify serialise to exactly the target byte length', () => {
+  const obj = { entries: [], settings: { autoLockMinutes: 5 } };
+  for (const target of [400, 813, 2048]) {
+    const padded = padPlaintextTo(obj, target);
+    assert.equal(_utf8(JSON.stringify(padded)).length, target);
+    assert.deepEqual(padded.entries, []);
+    assert.equal(padded.settings.autoLockMinutes, 5);
+    assert.equal(typeof padded._pad, 'string');
+    // _pad is the only added key
+    assert.deepEqual(Object.keys(padded).sort(), ['_pad', 'entries', 'settings']);
+  }
+});
+
+test('padPlaintextTo throws when the object is already larger than the target', () => {
+  const big = { entries: Array.from({ length: 50 }, (_, i) => ({ id: 'x' + i, name: 'n'.repeat(20) })), settings: {} };
+  const already = _utf8(JSON.stringify({ ...big, _pad: '' })).length;
+  assert.throws(() => padPlaintextTo(big, already - 10));
+});
+
+test('padPlaintextTo _pad uses only base64 characters (no JSON escaping)', () => {
+  const padded = padPlaintextTo({ entries: [], settings: {} }, 600);
+  assert.match(padded._pad, /^[A-Za-z0-9+/]*$/);
+});
