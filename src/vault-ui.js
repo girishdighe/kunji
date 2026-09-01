@@ -1,6 +1,6 @@
 // The Vault tab. References bundle-global functions from vault.js / derive.js
 // after concatenation (createVault, addEntry, updateEntry, removeEntry,
-// encodeEnvelope, parseEnvelope, unlockVault, deriveMasterKey, computeKcv,
+// encodeEnvelope, parseEnvelope, unlockVault, openVault, deriveMasterKey, computeKcv,
 // derivePassword, groupInFours). Never imported by tests.
 
 function initVaultTab() {
@@ -24,6 +24,12 @@ function initVaultTab() {
   let idleTimer = null;
   let idleDeadline = 0;           // epoch ms the current UNLOCKED session auto-locks at
   let countdownTimer = null;
+  let unlockedSlot = 'real';       // 'real' | 'decoy' — how the loaded file was opened
+  let activeSlot = 'real';         // which slot the list/detail/editor operates on
+  let decoyVault = null;           // { entries, settings } while a decoy is held this session
+  let decoyMasterKey = null;       // Uint8Array while a decoy is held this session
+  let realVault = null;            // stash of the real pair while activeSlot === 'decoy'
+  let realMasterKey = null;
 
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]
@@ -39,6 +45,12 @@ function initVaultTab() {
     listQuery = '';
     identityHintOn = false;
     vaultBridge.clear();
+    unlockedSlot = 'real';
+    activeSlot = 'real';
+    decoyVault = null;
+    decoyMasterKey = null;
+    realVault = null;
+    realMasterKey = null;
   }
 
   function render() {
@@ -117,6 +129,8 @@ function initVaultTab() {
       dirty = true;
       state = 'UNLOCKED';
       vaultBridge.publish(vault.entries);
+      unlockedSlot = 'real';
+      activeSlot = 'real';
       render();
     } catch (e) {
       errEl.textContent = 'Could not create the vault.';
@@ -190,9 +204,12 @@ function initVaultTab() {
       btn.disabled = true; btn.textContent = 'Unlocking…';
       try {
         const mk = await deriveMasterKey(pw, id);
-        const out = await unlockVault(loadedEnvelope, { masterKey: mk });
+        const out = await openVault(loadedEnvelope, { masterKey: mk });
         masterKey = mk;
-        vault = out;
+        vault = { entries: out.entries, settings: out.settings };
+        unlockedSlot = out.slot;
+        activeSlot = 'real';
+        decoyVault = null; decoyMasterKey = null; realVault = null; realMasterKey = null;
         sessionIdentity = id;
         identityHintOn = typeof loadedEnvelope.identityHint === 'string';
         dirty = false;
