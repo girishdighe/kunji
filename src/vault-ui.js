@@ -340,12 +340,47 @@ function initVaultTab() {
 
   async function saveVault() {
     const prevRevision = loadedEnvelope ? (Number(loadedEnvelope.revision) || 0) : 0;
-    const text = await encodeEnvelope(vault, {
-      masterKey,
-      identityHint: currentIdentityForHint(),
-      prevRevision,
-      writerId,
-    });
+
+    // make sure the active slot's edits are reflected in its stash
+    if (activeSlot === 'real') { realVault = vault; realMasterKey = masterKey; }
+    else { decoyVault = vault; decoyMasterKey = masterKey; }
+    const realPair = activeSlot === 'real' ? { v: vault, k: masterKey } : { v: realVault, k: realMasterKey };
+
+    let text;
+    if (unlockedSlot === 'decoy') {
+      // Duress: we hold only the decoy key. Keep the real ct verbatim; re-encrypt
+      // just the decoy slot; bump revision. Pad the decoy plaintext to the real
+      // ct's plaintext length (real ct length - 16-byte tag).
+      const realCtLen = base64ToBytes(loadedEnvelope.ct).length - 16;
+      const decoyObj = { entries: vault.entries, settings: vault.settings };
+      let decoyBytes = new TextEncoder().encode(JSON.stringify(decoyObj));
+      if (decoyBytes.length < realCtLen) {
+        decoyBytes = new TextEncoder().encode(padPlaintextTo(decoyObj, realCtLen));
+      } else if (decoyBytes.length > realCtLen) {
+        alert('The decoy vault has grown larger than the real vault — remove some decoy entries before saving under this passphrase.');
+        return;
+      }
+      const dKey = await deriveVaultKey(masterKey);
+      const dIv = randomBytes(12);
+      const dCt = await aesGcmEncrypt(dKey, dIv, decoyBytes, VAULT_AAD);
+      const env = {
+        ...loadedEnvelope,
+        decoy: { kcv: await computeKcv(masterKey), iv: bytesToBase64(dIv), ct: bytesToBase64(dCt) },
+        revision: prevRevision + 1,
+        lastWriter: writerId,
+        updatedAt: new Date().toISOString(),
+      };
+      text = JSON.stringify(env, null, 2) + '\n';
+    } else {
+      text = await encodeEnvelope(realPair.v, {
+        masterKey: realPair.k,
+        identityHint: currentIdentityForHint(),
+        prevRevision,
+        writerId,
+        decoy: decoyMasterKey ? { vault: decoyVault, masterKey: decoyMasterKey } : null,
+      });
+    }
+
     const blob = new Blob([text], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
