@@ -38,6 +38,7 @@ function initVaultTab() {
     selectedId = null;
     listQuery = '';
     identityHintOn = false;
+    vaultBridge.clear();
   }
 
   function render() {
@@ -115,6 +116,7 @@ function initVaultTab() {
       identityHintOn = false;
       dirty = true;
       state = 'UNLOCKED';
+      vaultBridge.publish(vault.entries);
       render();
     } catch (e) {
       errEl.textContent = 'Could not create the vault.';
@@ -195,6 +197,7 @@ function initVaultTab() {
         identityHintOn = typeof loadedEnvelope.identityHint === 'string';
         dirty = false;
         state = 'UNLOCKED';
+        vaultBridge.publish(vault.entries);
         render();
       } catch (e) {
         btn.disabled = false; btn.textContent = 'Unlock';
@@ -208,7 +211,11 @@ function initVaultTab() {
       }
     });
   }
-  function markDirty() { dirty = true; if (state === 'UNLOCKED' && view === 'list') renderList(); }
+  function markDirty() {
+    dirty = true;
+    if (state === 'UNLOCKED') vaultBridge.publish(vault.entries);
+    if (state === 'UNLOCKED' && view === 'list') renderList();
+  }
 
   function clearIdle() {
     if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
@@ -269,6 +276,7 @@ function initVaultTab() {
     // beforeunload guard in place (spec section 6).
     loadedEnvelope = parseEnvelope(text);
     dirty = false;
+    vaultBridge.publish(vault.entries);
     if (!sessionMoveNoteShown) {
       sessionMoveNoteShown = true;
       alert('Saved as kunji-data.json in your downloads. Move it to wherever your sync watches, and overwrite the previous copy.');
