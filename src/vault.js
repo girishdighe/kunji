@@ -94,8 +94,18 @@ export function updateEntry(vault, id, patch) {
   };
 }
 
+// Phase 3d: a delete is a tombstone kept in `entries[]` forever, so it survives
+// a later merge with a device that still has the entry.
 export function removeEntry(vault, id) {
-  return { ...vault, entries: vault.entries.filter((e) => e.id !== id) };
+  const now = new Date().toISOString();
+  return {
+    ...vault,
+    entries: vault.entries.map((e) => (e.id === id ? { id, deleted: true, updatedAt: now } : e)),
+  };
+}
+
+export function visibleEntries(vault) {
+  return vault.entries.filter((e) => e && !e.deleted);
 }
 
 export async function encodeEnvelope(vault, { masterKey, identityHint = null, prevRevision = 0, writerId, decoy = null }) {

@@ -45,7 +45,7 @@ test('newDecoyBytes(ctLen) has 4-byte kcv, 12-byte iv, ctLen-byte ct, all base64
 });
 
 import {
-  createVault, makeEntry, addEntry, updateEntry, removeEntry,
+  createVault, makeEntry, addEntry, updateEntry, removeEntry, visibleEntries,
 } from '../src/vault.js';
 
 test('createVault is empty with the default settings', () => {
@@ -103,11 +103,28 @@ test('updateEntry patches by id, bumps updatedAt, keeps id', async () => {
   assert.notEqual(v.entries[0].updatedAt, before);
 });
 
-test('removeEntry drops by id', () => {
+test('removeEntry replaces the entry with a tombstone, in place', () => {
   let v = addEntry(createVault(), { name: 'A', site: 's', account: 'a' });
+  v = addEntry(v, { name: 'B', site: 's2', account: 'b' });
   const id = v.entries[0].id;
   v = removeEntry(v, id);
-  assert.equal(v.entries.length, 0);
+  assert.equal(v.entries.length, 2, 'array length unchanged');
+  const t = v.entries.find((e) => e.id === id);
+  assert.deepEqual(Object.keys(t).sort(), ['deleted', 'id', 'updatedAt']);
+  assert.equal(t.deleted, true);
+  // idempotent
+  const again = removeEntry(v, id).entries.find((e) => e.id === id);
+  assert.equal(again.deleted, true);
+});
+
+test('visibleEntries filters tombstones, preserves order, does not mutate', () => {
+  let v = addEntry(createVault(), { name: 'A', site: 's', account: 'a' });
+  v = addEntry(v, { name: 'B', site: 's2', account: 'b' });
+  v = addEntry(v, { name: 'C', site: 's3', account: 'c' });
+  v = removeEntry(v, v.entries[1].id);
+  const vis = visibleEntries(v);
+  assert.deepEqual(vis.map((e) => e.name), ['A', 'C']);
+  assert.equal(v.entries.length, 3, 'source untouched');
 });
 
 import { encodeEnvelope } from '../src/vault.js';
