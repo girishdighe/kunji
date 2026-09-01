@@ -139,11 +139,22 @@ function initVaultTab() {
       notes, encrypted with your master passphrase. It is optional — the generator
       works without it.</p>
       <button class="btn-ghost" id="vOpenBtn" type="button">Open vault file&hellip;</button>
+      <button class="btn-ghost" id="vScanBtn" type="button" style="margin-top:8px">Scan QR&hellip;</button>
       <input type="file" id="vFileInput" accept=".json,application/json" hidden>
       <div class="v-center-link"><button class="link-btn" id="vCreateBtn" type="button">Create a new vault</button></div>
       <div class="error" id="vError"></div>
     `;
     panel.querySelector('#vOpenBtn').addEventListener('click', () => panel.querySelector('#vFileInput').click());
+    panel.querySelector('#vScanBtn').addEventListener('click', () => scanQr((text) => {
+      try {
+        loadedEnvelope = parseEnvelope(text);
+        identityHintOn = typeof loadedEnvelope.identityHint === 'string';
+        state = 'LOCKED';
+        render();
+      } catch {
+        panel.querySelector('#vError').textContent = 'Scanned data is not a Kunji vault.';
+      }
+    }));
     panel.querySelector('#vFileInput').addEventListener('change', onFilePicked);
     panel.querySelector('#vCreateBtn').addEventListener('click', () => { state = 'CREATE'; render(); });
   }
@@ -492,7 +503,7 @@ function initVaultTab() {
           <button id="vSlotReal" type="button" aria-pressed="${activeSlot === 'real'}">Real vault</button>
           <button id="vSlotDecoy" type="button" aria-pressed="${activeSlot === 'decoy'}">Decoy</button>
         </div>` : ''}
-      <div class="v-foot"><button class="link-btn" id="vSave" type="button">Save vault</button> &middot; <button class="link-btn" id="vLock" type="button">Lock</button> &middot; <span id="vIdleCountdown"></span> &middot; <button class="link-btn" id="vMerge" type="button">Merge another copy&hellip;</button>
+      <div class="v-foot"><button class="link-btn" id="vSave" type="button">Save vault</button> &middot; <button class="link-btn" id="vLock" type="button">Lock</button> &middot; <span id="vIdleCountdown"></span> &middot; <button class="link-btn" id="vMerge" type="button">Merge another copy&hellip;</button> &middot; <button class="link-btn" id="vShowQr" type="button">Show as QR</button> &middot; <button class="link-btn" id="vScanMerge" type="button">Scan QR to merge</button>
       <input type="file" id="vMergeInput" accept=".json,application/json" hidden></div>
       <label class="v-foot" style="display:block"><input type="checkbox" id="vHint" ${identityHintOn ? 'checked' : ''}> Prefill identity on devices that open this file <span class="v-danger">(anyone with the file can read it)</span></label>
       ${unlockedSlot === 'real' && activeSlot === 'real' ? `
@@ -524,6 +535,13 @@ function initVaultTab() {
     });
     panel.querySelector('#vMerge').addEventListener('click', () => panel.querySelector('#vMergeInput').click());
     panel.querySelector('#vMergeInput').addEventListener('change', onFilePicked);
+    panel.querySelector('#vShowQr').addEventListener('click', () => showQr().catch(() => {}));
+    panel.querySelector('#vScanMerge').addEventListener('click', () => scanQr(async (text) => {
+      let env, inVault;
+      try { env = parseEnvelope(text); inVault = await unlockVault(env, { masterKey }); }
+      catch { alert('Scanned data is not readable with this passphrase.'); return; }
+      renderMerge(env, inVault);
+    }));
     if (panel.querySelector('#vSlotReal')) panel.querySelector('#vSlotReal').addEventListener('click', () => useSlot('real'));
     if (panel.querySelector('#vSlotDecoy')) panel.querySelector('#vSlotDecoy').addEventListener('click', () => useSlot('decoy'));
     if (panel.querySelector('#vDecoySetup')) panel.querySelector('#vDecoySetup').addEventListener('click', () => decoyPrompt('create'));
@@ -621,6 +639,49 @@ function initVaultTab() {
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
+  }
+
+  async function showQr() {
+    const prevRevision = mergedFromRevision != null ? mergedFromRevision
+      : (loadedEnvelope ? (Number(loadedEnvelope.revision) || 0) : 0);
+    const text = await encodeEnvelope(vault, {
+      masterKey, identityHint: currentIdentityForHint(), prevRevision, writerId,
+      decoy: (typeof decoyMasterKey !== 'undefined' && decoyMasterKey) ? { vault: decoyVault, masterKey: decoyMasterKey } : null,
+    });
+    // frameBytes: conservative for a phone scan (QR ~v10 / M)
+    const frames = splitTransfer(text, { frameBytes: 180 });
+    if (frames.length > 60) {
+      alert('This vault is too large for a QR transfer — use Save vault (file) or Syncthing.');
+      return;
+    }
+    let i = 0;
+    panel.innerHTML = `
+      <div class="v-bar"><button class="link-btn" id="qrDone" type="button">&lsaquo; Done</button></div>
+      <div class="qr-panel">
+        <canvas class="qr-canvas" id="qrCanvas"></canvas>
+        <div class="qr-progress" id="qrCap"></div>
+        <div class="v-foot">Scan this with the other device's camera.</div>
+      </div>
+    `;
+    panel.querySelector('#qrDone').addEventListener('click', () => { clearInterval(timer); render(); });
+    const canvas = panel.querySelector('#qrCanvas');
+    const cap = panel.querySelector('#qrCap');
+    const paint = () => {
+      const m = qrMatrix(new TextEncoder().encode(frames[i]), { ecc: 'M' });
+      const q = 4, s = 4, dim = (m.length + q * 2) * s;
+      canvas.width = dim; canvas.height = dim;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, dim, dim);
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, dim, dim);
+      ctx.fillStyle = '#000';
+      for (let y = 0; y < m.length; y++) for (let x = 0; x < m.length; x++) {
+        if (m[y][x]) ctx.fillRect((q + x) * s, (q + y) * s, s, s);
+      }
+      cap.textContent = frames.length > 1 ? `frame ${i + 1} / ${frames.length}` : '';
+      i = (i + 1) % frames.length;
+    };
+    paint();
+    const timer = frames.length > 1 ? setInterval(paint, 250) : null;
   }
 
   function showSaveError(e) {
