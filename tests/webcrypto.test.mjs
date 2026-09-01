@@ -75,3 +75,26 @@ test('AES-256-GCM rejects a wrong AAD', async () => {
   const ct = await aesGcmEncrypt(key, iv, utf8('hello'), utf8('aad-one'));
   await assert.rejects(() => aesGcmDecrypt(key, iv, ct, utf8('aad-two')));
 });
+
+import { hmac } from '../src/webcrypto.js';
+import { createHmac } from 'node:crypto';
+
+test('hmac(SHA-1) matches node:crypto', async () => {
+  const key = new Uint8Array([1, 2, 3, 4]);
+  const msg = new Uint8Array([9, 9, 9]);
+  const got = await hmac('SHA-1', key, msg);
+  const want = new Uint8Array(createHmac('sha1', Buffer.from(key)).update(Buffer.from(msg)).digest());
+  assert.deepEqual(got, want);
+});
+
+test('hmac(SHA-256) still equals hmacSha256', async () => {
+  const key = new Uint8Array([5, 6, 7]);
+  const msg = new Uint8Array([1, 1, 1, 1]);
+  assert.deepEqual(await hmac('SHA-256', key, msg), await hmacSha256(key, msg));
+});
+
+test('hmac(SHA-512) matches node:crypto', async () => {
+  const got = await hmac('SHA-512', new Uint8Array([1]), new Uint8Array([2]));
+  const want = new Uint8Array(createHmac('sha512', Buffer.from([1])).update(Buffer.from([2])).digest());
+  assert.deepEqual(got, want);
+});

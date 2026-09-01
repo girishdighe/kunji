@@ -40,3 +40,12 @@ test('base64 round-trip and known value', () => {
   assert.equal(bytesToBase64(utf8('hello')), 'aGVsbG8=');
   assert.equal(fromUtf8(base64ToBytes('aGVsbG8=')), 'hello');
 });
+
+import { uint64be } from '../src/encoding.js';
+
+test('uint64be is 8 big-endian bytes', () => {
+  assert.deepEqual([...uint64be(0)], [0, 0, 0, 0, 0, 0, 0, 0]);
+  assert.deepEqual([...uint64be(1)], [0, 0, 0, 0, 0, 0, 0, 1]);
+  assert.deepEqual([...uint64be(0x0102030405)], [0, 0, 0, 1, 2, 3, 4, 5]);
+  assert.deepEqual([...uint64be(0xffffffff)], [0, 0, 0, 0, 255, 255, 255, 255]);
+});

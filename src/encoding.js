@@ -18,6 +18,16 @@ export function uint32be(n) {
   return b;
 }
 
+export function uint64be(n) {
+  const b = new Uint8Array(8);
+  // n is a JS number; safe for TOTP counters (< 2^53). High 32 bits via division.
+  let hi = Math.floor(n / 0x100000000);
+  let lo = n >>> 0;
+  for (let i = 3; i >= 0; i--) { b[i] = hi & 0xff; hi >>>= 8; }
+  for (let i = 7; i >= 4; i--) { b[i] = lo & 0xff; lo >>>= 8; }
+  return b;
+}
+
 export function concatBytes(...arrays) {
   let total = 0;
   for (const a of arrays) total += a.length;

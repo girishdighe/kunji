@@ -20,13 +20,16 @@ export async function hkdfSha256(ikmBytes, saltBytes, infoBytes, lenBytes) {
   return new Uint8Array(bits);
 }
 
-export async function hmacSha256(keyBytes, msgBytes) {
+// algorithm: 'SHA-1' | 'SHA-256' | 'SHA-512'
+export async function hmac(algorithm, keyBytes, msgBytes) {
   const key = await crypto.subtle.importKey(
-    'raw', keyBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
+    'raw', keyBytes, { name: 'HMAC', hash: algorithm }, false, ['sign'],
   );
   const sig = await crypto.subtle.sign('HMAC', key, msgBytes);
   return new Uint8Array(sig);
 }
+
+export const hmacSha256 = (keyBytes, msgBytes) => hmac('SHA-256', keyBytes, msgBytes);
 
 export async function aesGcmEncrypt(keyBytes, ivBytes, plaintextBytes, aadBytes) {
   const key = await crypto.subtle.importKey(
