@@ -7,10 +7,11 @@ stored or sent. See `docs/specs/2026-09-01-kunji-design.md` for the design and
 
 ## Status
 
-Phase 2: the deterministic v1 generator (Phase 1) plus an optional encrypted
-vault — `kunji-data.json`, AES-256-GCM, entry list / detail / editor, SSO
-entries, 5-minute idle auto-lock — still shipped as a single file. Decoy
-authoring, QR, and sync merge are Phase 3.
+Phases 1–3 shipped, still one file: the deterministic `v1` generator, an
+optional AES-256-GCM vault (`kunji-data.json`), the Generate-tab account picker,
+a real decoy vault, an installable PWA build, tombstone-based sync merge, and
+whole-vault QR transfer. Releases are tagged, checksummed, and SSH-signed — see
+**Verifying a download** below.
 
 ## Build
 
@@ -23,6 +24,29 @@ screen. It makes no network requests.
 `node tools/build.mjs` also writes `dist/pwa/` — an installable copy (service
 worker + manifest + icons) whose CSP still blocks all network from the page.
 `node tools/build.mjs --no-pwa` writes only the single file.
+
+A tagged release ships three files: `kunji.html`, `kunji.html.sha256`, and
+`kunji.html.sig` (an SSH signature). See `docs/RELEASING.md` to cut one.
+
+## Verifying a download
+
+The `allowed_signers` file in this repo lists the maintainer's SSH signing key
+(also on their GitHub profile). Given `kunji.html`, `kunji.html.sha256`,
+`kunji.html.sig`, and a copy of `allowed_signers`:
+
+    sha256sum -c kunji.html.sha256
+
+    ssh-keygen -Y verify -f allowed_signers \
+      -I "$(awk 'NF && $1!~/^#/ {print $1; exit}' allowed_signers)" \
+      -n file -s kunji.html.sig < kunji.html
+
+If you cloned the repo instead of downloading the file:
+
+    git config gpg.ssh.allowedSignersFile "$PWD/allowed_signers"
+    git verify-tag v<version>
+
+Every published tag is also independently rebuilt by CI, which re-checks the
+signature and confirms the rebuilt hash matches `releases/v<version>.txt`.
 
 ## Test
 
@@ -56,3 +80,9 @@ profile id, never by changing v1.
 
 Standard primitives via the platform `crypto.subtle` (PBKDF2-SHA512, HKDF-SHA256,
 HMAC-SHA256). No third-party libraries, no build step beyond file concatenation.
+
+## More
+
+- Cutting a release: `docs/RELEASING.md`
+- Moving a vault between devices: `docs/sync.md`
+- Design: `docs/specs/`, implementation plans: `docs/plans/`
