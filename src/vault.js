@@ -45,12 +45,16 @@ export function createVault() {
 }
 
 export function makeEntry(partial) {
-  const now = new Date().toISOString();
+  // Both branches are built from named fields only — never `...partial` — so a
+  // partial carrying fields for the other type (a stale `via`, or leftover
+  // counter/rules/totp/recoveryCodes) cannot bleed onto the entry.
   const common = {
-    name: '', site: '', account: '', notes: '',
-    ...partial,
     id: crypto.randomUUID(),
-    updatedAt: now,
+    updatedAt: new Date().toISOString(),
+    name: partial.name ?? '',
+    site: partial.site ?? '',
+    account: partial.account ?? '',
+    notes: partial.notes ?? '',
   };
   if (partial.type === 'sso') {
     return {
@@ -89,6 +93,8 @@ export function removeEntry(vault, id) {
 }
 
 export async function encodeEnvelope(vault, { masterKey, identityHint = null, prevRevision = 0, writerId }) {
+  // Only `entries` and `settings` are persisted; any other top-level keys a
+  // future format version adds would be dropped on a v1 save-through.
   const plainBytes = utf8(JSON.stringify({ entries: vault.entries, settings: vault.settings }));
   const vaultKey = await deriveVaultKey(masterKey);
   const iv = randomBytes(12);
@@ -126,6 +132,9 @@ export function parseEnvelope(text) {
   if (!d || typeof d.kcv !== 'string' || typeof d.iv !== 'string' || typeof d.ct !== 'string') {
     throw new BadEnvelopeError('missing decoy section');
   }
+  if (!Number.isInteger(env.revision) || env.revision < 0) {
+    throw new BadEnvelopeError('missing or invalid revision');
+  }
   return env;
 }
 
@@ -148,7 +157,8 @@ export async function unlockVault(envelope, { masterKey }) {
   } catch {
     throw new CorruptVaultError('the vault contents could not be read');
   }
-  if (!plain || !Array.isArray(plain.entries) || typeof plain.settings !== 'object') {
+  if (!plain || !Array.isArray(plain.entries)
+      || typeof plain.settings !== 'object' || plain.settings === null || Array.isArray(plain.settings)) {
     throw new CorruptVaultError('the vault contents are not in the expected shape');
   }
   return { entries: plain.entries, settings: plain.settings };

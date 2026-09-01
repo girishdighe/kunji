@@ -22,6 +22,8 @@ function initVaultTab() {
   let listQuery = '';
   let sessionMoveNoteShown = false;
   let idleTimer = null;
+  let idleDeadline = 0;           // epoch ms the current UNLOCKED session auto-locks at
+  let countdownTimer = null;
 
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]
@@ -34,6 +36,8 @@ function initVaultTab() {
     dirty = false;
     view = 'list';
     selectedId = null;
+    listQuery = '';
+    identityHintOn = false;
   }
 
   function render() {
@@ -137,22 +141,35 @@ function initVaultTab() {
     const kcv = panel.querySelector('#vlKcv');
     const kcvText = panel.querySelector('#vlKcvText');
 
+    let refreshSeq = 0;
+    let refreshDebounce = null;
     async function refresh() {
+      const seq = ++refreshSeq;
       const id = identityEl.value.trim();
       const pw = passEl.value;
       if (!id || !pw) { kcv.dataset.state = 'none'; kcvText.textContent = 'enter identity and passphrase'; return; }
       kcv.dataset.state = 'none'; kcvText.textContent = 'checking…';
       try {
         const mk = await deriveMasterKey(pw, id);
-        if (await computeKcv(mk) === loadedEnvelope.kcv) {
+        const ok = await computeKcv(mk) === loadedEnvelope.kcv;
+        if (seq !== refreshSeq) return; // a newer keystroke superseded this run
+        if (ok) {
           kcv.dataset.state = 'ok'; kcvText.textContent = 'passphrase matches this vault';
         } else {
           kcv.dataset.state = 'bad'; kcvText.textContent = 'not this vault’s passphrase';
         }
       } catch {
+        if (seq !== refreshSeq) return;
         kcv.dataset.state = 'bad'; kcvText.textContent = 'could not derive key';
       }
     }
+    // Live as you type, but debounced — the check runs a 600k-iteration PBKDF2.
+    function scheduleRefresh() {
+      clearTimeout(refreshDebounce);
+      refreshDebounce = setTimeout(refresh, 350);
+    }
+    identityEl.addEventListener('input', scheduleRefresh);
+    passEl.addEventListener('input', scheduleRefresh);
     identityEl.addEventListener('change', refresh);
     passEl.addEventListener('change', refresh);
 
@@ -193,16 +210,33 @@ function initVaultTab() {
   }
   function markDirty() { dirty = true; if (state === 'UNLOCKED' && view === 'list') renderList(); }
 
-  function clearIdle() { if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; } }
+  function clearIdle() {
+    if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+    if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+    idleDeadline = 0;
+  }
+
+  function paintCountdown() {
+    const el = panel.querySelector('#vIdleCountdown');
+    if (!el || !idleDeadline) return;
+    const left = Math.max(0, Math.round((idleDeadline - Date.now()) / 1000));
+    const mm = Math.floor(left / 60);
+    const ss = String(left % 60).padStart(2, '0');
+    el.textContent = `Auto-locks in ${mm}:${ss}`;
+  }
 
   function armIdle() {
     clearIdle();
     if (state !== 'UNLOCKED') return;
     const mins = (vault && vault.settings && vault.settings.autoLockMinutes) || 5;
+    idleDeadline = Date.now() + mins * 60 * 1000;
     idleTimer = setTimeout(() => {
       // discard unsaved edits — the lock guarantee wins
       lock();
     }, mins * 60 * 1000);
+    // Same lifecycle as idleTimer: every clearIdle()/armIdle() replaces both.
+    countdownTimer = setInterval(paintCountdown, 1000);
+    paintCountdown();
   }
 
   function lock() {
@@ -214,7 +248,7 @@ function initVaultTab() {
   }
 
   async function saveVault() {
-    const prevRevision = loadedEnvelope ? (loadedEnvelope.revision || 0) : 0;
+    const prevRevision = loadedEnvelope ? (Number(loadedEnvelope.revision) || 0) : 0;
     const text = await encodeEnvelope(vault, {
       masterKey,
       identityHint: currentIdentityForHint(),
@@ -285,10 +319,11 @@ function initVaultTab() {
       <input class="v-search" id="vSearch" type="text" placeholder="Search…" value="${esc(listQuery || '')}">
       <div id="vRows">${rowsHtml()}</div>
       ${dirty ? '<div class="v-dirty">Unsaved changes<button class="link-btn" id="vSaveTop" type="button" style="color:#f5c518">Save vault</button></div>' : ''}
-      <div class="v-foot"><button class="link-btn" id="vSave" type="button">Save vault</button> &middot; <button class="link-btn" id="vLock" type="button">Lock</button></div>
+      <div class="v-foot"><button class="link-btn" id="vSave" type="button">Save vault</button> &middot; <button class="link-btn" id="vLock" type="button">Lock</button> &middot; <span id="vIdleCountdown"></span></div>
       <label class="v-foot" style="display:block"><input type="checkbox" id="vHint" ${identityHintOn ? 'checked' : ''}> Prefill identity on devices that open this file <span class="v-danger">(anyone with the file can read it)</span></label>
       <div class="error" id="vListError"></div>
     `;
+    paintCountdown();
 
     const search = panel.querySelector('#vSearch');
     search.addEventListener('input', () => {
@@ -320,11 +355,19 @@ function initVaultTab() {
     if (!e) { view = 'list'; return renderList(); }
 
     if (e.type === 'sso') {
+      const viaSite = (e.via && e.via.site) || '';
+      const viaAccount = (e.via && e.via.account) || '';
+      const linked = vault.entries.some((x) => x.id !== e.id
+        && x.site.toLowerCase() === viaSite.toLowerCase()
+        && x.account.toLowerCase() === viaAccount.toLowerCase());
+      const linkNote = viaSite
+        ? (linked ? '' : ' <span class="v-danger">(no matching vault entry)</span>')
+        : ' <span class="v-danger">(not set)</span>';
       panel.innerHTML = `
         <div class="v-bar"><button class="link-btn" id="vBack" type="button">&lsaquo; Vault</button><button class="link-btn" id="vEdit" type="button">Edit</button></div>
         <div class="title" style="font-size:18px">${esc(e.name)}</div>
         <div class="v-meta">${esc(e.site)} &middot; ${esc(e.account)}</div>
-        <div class="v-sec"><div class="v-h">Log in via</div><div>${esc(e.via && e.via.site)} &middot; ${esc(e.via && e.via.account)}</div></div>
+        <div class="v-sec"><div class="v-h">Log in via</div><div>${esc(viaSite)} &middot; ${esc(viaAccount)}${linkNote}</div></div>
         <div class="v-sec"><div class="v-h">Notes</div><div class="v-meta">${esc(e.notes) || '—'}</div></div>
       `;
       panel.querySelector('#vBack').addEventListener('click', () => { view = 'list'; render(); });
@@ -409,7 +452,13 @@ function initVaultTab() {
 
   function renderEditor() {
     const existing = selectedEntry(); // null when creating
-    const e = existing || makeEntry({ type: 'password' });
+    // Blank-form defaults for the create case — just the fields the template
+    // reads. No need to mint an id/timestamp here (makeEntry does that on save).
+    const e = existing || {
+      type: 'password', name: '', site: '', account: '', notes: '',
+      length: 20, counter: 1, rules: 'standard', totp: '', recoveryCodes: [],
+      via: { site: '', account: '' },
+    };
     const isSso = e.type === 'sso';
 
     panel.innerHTML = `

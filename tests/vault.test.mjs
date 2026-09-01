@@ -242,3 +242,35 @@ test('unlockVault throws CorruptVaultError when the plaintext JSON has the wrong
   const env = await envelopeDecryptingTo(u('{"entries":"nope","settings":{}}'));
   await assert.rejects(() => unlockVault(env, { masterKey: MK }), CorruptVaultError);
 });
+
+test('unlockVault rejects settings that is null or an array (typeof null === "object" gap)', async () => {
+  const { utf8: u } = await import('../src/encoding.js');
+  for (const bad of ['{"entries":[],"settings":null}', '{"entries":[],"settings":[]}']) {
+    const env = await envelopeDecryptingTo(u(bad));
+    await assert.rejects(() => unlockVault(env, { masterKey: MK }), CorruptVaultError);
+  }
+});
+
+test('parseEnvelope rejects a missing, non-integer, or negative revision', async () => {
+  const good = JSON.parse(await encodeEnvelope(createVault(), { masterKey: MK, writerId: 'w' }));
+  assert.equal(parseEnvelope(JSON.stringify(good)).revision, 1);
+  for (const rev of [undefined, '5', 1.5, -1, null]) {
+    const bad = { ...good };
+    if (rev === undefined) delete bad.revision; else bad.revision = rev;
+    assert.throws(() => parseEnvelope(JSON.stringify(bad)), BadEnvelopeError);
+  }
+});
+
+test('makeEntry sso branch drops stray password fields; password branch drops stray via', () => {
+  const sso = makeEntry({
+    type: 'sso', name: 'N', site: 's', account: 'a', via: { site: 'g', account: 'x' },
+    counter: 9, length: 40, rules: 'max-symbols', totp: 'SECRET', recoveryCodes: ['c1'], profile: 'v1',
+  });
+  assert.equal(sso.type, 'sso');
+  for (const k of ['counter', 'length', 'rules', 'totp', 'recoveryCodes', 'profile']) {
+    assert.ok(!(k in sso), `sso entry must not carry ${k}`);
+  }
+  const pw = makeEntry({ type: 'password', name: 'N', site: 's', account: 'a', via: { site: 'g', account: 'x' } });
+  assert.equal(pw.type, 'password');
+  assert.ok(!('via' in pw), 'password entry must not carry via');
+});
