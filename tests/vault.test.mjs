@@ -325,28 +325,29 @@ test('resolveEntryForPick: sso with blank via returns null', () => {
 import { padPlaintextTo } from '../src/vault.js';
 import { utf8 as _utf8 } from '../src/encoding.js';
 
-test('padPlaintextTo makes JSON.stringify serialise to exactly the target byte length', () => {
+test('padPlaintextTo returns JSON text of exactly the target byte length, parsing back to obj', () => {
   const obj = { entries: [], settings: { autoLockMinutes: 5 } };
   for (const target of [400, 813, 2048]) {
-    const padded = padPlaintextTo(obj, target);
-    assert.equal(_utf8(JSON.stringify(padded)).length, target);
-    assert.deepEqual(padded.entries, []);
-    assert.equal(padded.settings.autoLockMinutes, 5);
-    assert.equal(typeof padded._pad, 'string');
-    // _pad is the only added key
-    assert.deepEqual(Object.keys(padded).sort(), ['_pad', 'entries', 'settings']);
+    const text = padPlaintextTo(obj, target);
+    assert.equal(typeof text, 'string');
+    assert.equal(_utf8(text).length, target);
+    assert.deepEqual(JSON.parse(text), obj);
+  }
+});
+
+test('padPlaintextTo can hit any target >= the raw length (no dead zone)', () => {
+  const obj = { entries: [{ id: 'a' }], settings: {} };
+  const raw = _utf8(JSON.stringify(obj)).length;
+  for (const target of [raw, raw + 1, raw + 5, raw + 9, raw + 200]) {
+    assert.equal(_utf8(padPlaintextTo(obj, target)).length, target);
+    assert.deepEqual(JSON.parse(padPlaintextTo(obj, target)), obj);
   }
 });
 
 test('padPlaintextTo throws when the object is already larger than the target', () => {
-  const big = { entries: Array.from({ length: 50 }, (_, i) => ({ id: 'x' + i, name: 'n'.repeat(20) })), settings: {} };
-  const already = _utf8(JSON.stringify({ ...big, _pad: '' })).length;
-  assert.throws(() => padPlaintextTo(big, already - 10));
-});
-
-test('padPlaintextTo _pad uses only base64 characters (no JSON escaping)', () => {
-  const padded = padPlaintextTo({ entries: [], settings: {} }, 600);
-  assert.match(padded._pad, /^[A-Za-z0-9+/]*$/);
+  const obj = { entries: [{ id: 'x', name: 'n'.repeat(40) }], settings: {} };
+  const raw = _utf8(JSON.stringify(obj)).length;
+  assert.throws(() => padPlaintextTo(obj, raw - 5));
 });
 
 import { openVault } from '../src/vault.js';
@@ -423,6 +424,24 @@ test('encodeEnvelope with a decoy pads whichever plaintext is shorter', async ()
   const decoy = addEntry(createVault(), { name: 'D', site: 'd', account: 'd', notes: 'x'.repeat(500) });
   const env = JSON.parse(await encodeEnvelope(real, { masterKey: RMK, writerId: 'w', decoy: { vault: decoy, masterKey: DMK } }));
   assert.equal(b64(env.ct).length, b64(env.decoy.ct).length);
+});
+
+test('encodeEnvelope with a decoy: ct lengths equal even when the two vaults differ by only a few bytes', async () => {
+  // Regression: the old _pad-key scheme had a 1..9 byte "dead zone" this hits.
+  const real = addEntry(createVault(), { name: 'Amazon', site: 'amazon.com', account: 'me' });
+  const decoy = addEntry(createVault(), { name: 'Netflix', site: 'netflix.com', account: 'me' });
+  const env = JSON.parse(await encodeEnvelope(real, { masterKey: RMK, writerId: 'w', decoy: { vault: decoy, masterKey: DMK } }));
+  assert.equal(b64(env.ct).length, b64(env.decoy.ct).length);
+  assert.equal((await openVault(env, { masterKey: RMK })).entries[0].name, 'Amazon');
+  assert.equal((await openVault(env, { masterKey: DMK })).entries[0].name, 'Netflix');
+});
+
+test('encodeEnvelope with a decoy: ct length is a multiple of PAD_BLOCK (+16 tag), giving duress headroom', async () => {
+  const { PAD_BLOCK } = await import('../src/vault.js');
+  const real = addEntry(createVault(), { name: 'R', site: 'r', account: 'r' });
+  const decoy = addEntry(createVault(), { name: 'D', site: 'd', account: 'd' });
+  const env = JSON.parse(await encodeEnvelope(real, { masterKey: RMK, writerId: 'w', decoy: { vault: decoy, masterKey: DMK } }));
+  assert.equal((b64(env.ct).length - 16) % PAD_BLOCK, 0);
 });
 
 test('encodeEnvelope without a decoy is unchanged: random filler, no _pad', async () => {

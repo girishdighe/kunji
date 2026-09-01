@@ -6,6 +6,12 @@ export const VAULT_FORMAT = 'kunji-data';
 export const VAULT_V = 1;
 export const VAULT_AAD = utf8('kunji-vault-v1');
 
+// Both slot plaintexts are padded to a multiple of this before encryption, so
+// the real and decoy ciphertexts are the same (quantised) length and a duress
+// edit of the decoy has room to grow. ~2 KB fits roughly a dozen entries per
+// block, so a sparse real vault still leaves a believable decoy room to change.
+export const PAD_BLOCK = 2048;
+
 export class BadEnvelopeError extends Error {
   constructor(msg) { super(msg); this.name = 'BadEnvelopeError'; }
 }
@@ -94,8 +100,9 @@ export function removeEntry(vault, id) {
 
 export async function encodeEnvelope(vault, { masterKey, identityHint = null, prevRevision = 0, writerId, decoy = null }) {
   // Only `entries` and `settings` are persisted per slot; other top-level keys
-  // (e.g. a future format's) would be dropped on a v1 save-through. `_pad` is a
-  // length-matching filler added below and stripped by the loader.
+  // (e.g. a future format's) would be dropped on a v1 save-through. When a decoy
+  // is present both plaintexts are space-padded (see padPlaintextTo) so the two
+  // ciphertexts are the same length.
   const realObj = { entries: vault.entries, settings: vault.settings };
   let realBytes = utf8(JSON.stringify(realObj));
 
@@ -103,9 +110,13 @@ export async function encodeEnvelope(vault, { masterKey, identityHint = null, pr
   if (decoy) {
     const decoyObj = { entries: decoy.vault.entries, settings: decoy.vault.settings };
     let decoyBytes = utf8(JSON.stringify(decoyObj));
-    const target = Math.max(realBytes.length, decoyBytes.length);
-    if (realBytes.length < target) realBytes = utf8(JSON.stringify(padPlaintextTo(realObj, target)));
-    if (decoyBytes.length < target) decoyBytes = utf8(JSON.stringify(padPlaintextTo(decoyObj, target)));
+    // Round both slots up to the next PAD_BLOCK boundary above the larger, so a
+    // later duress edit of the decoy (which can only re-use the real ct's length)
+    // has headroom, and the on-disk size is quantised rather than revealing the
+    // exact vault size.
+    const target = (Math.floor(Math.max(realBytes.length, decoyBytes.length) / PAD_BLOCK) + 1) * PAD_BLOCK;
+    realBytes = utf8(padPlaintextTo(realObj, target));
+    decoyBytes = utf8(padPlaintextTo(decoyObj, target));
     const dKey = await deriveVaultKey(decoy.masterKey);
     const dIv = randomBytes(12);
     const dCt = await aesGcmEncrypt(dKey, dIv, decoyBytes, VAULT_AAD);
@@ -225,17 +236,15 @@ export function resolveEntryForPick(entries, entry) {
 
 // --- Phase 3b: length-matching filler (pure) ---
 
-// Returns { ...obj, _pad } where `_pad` is a base64 string sized so that
-// utf8(JSON.stringify(result)).length === targetBytes exactly. Throws if `obj`
-// (with an empty _pad) already serialises to more than targetBytes. base64
-// characters are JSON-safe (no escaping), so one _pad char == one output byte.
+// Returns JSON text for `obj` padded with trailing ASCII spaces to exactly
+// `targetBytes` UTF-8 bytes. `JSON.parse` ignores trailing whitespace, so the
+// loader recovers `obj` unchanged. Throws if `obj` already serialises longer
+// than the target. Zero structural overhead — every target >= the raw length is
+// reachable (an object key would instead add a fixed ~10 bytes, leaving a
+// 1..9-byte dead zone the caller could accidentally land in).
 export function padPlaintextTo(obj, targetBytes) {
-  const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-  const base = utf8(JSON.stringify({ ...obj, _pad: '' })).length;
-  const need = targetBytes - base;
+  const json = JSON.stringify(obj);
+  const need = targetBytes - utf8(json).length;
   if (need < 0) throw new Error(`padPlaintextTo: object is ${-need} bytes over target`);
-  let pad = '';
-  const r = randomBytes(need);
-  for (let i = 0; i < need; i++) pad += B64[r[i] & 63];
-  return { ...obj, _pad: pad };
+  return json + ' '.repeat(need);
 }
