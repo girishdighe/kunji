@@ -44,7 +44,7 @@ function initVaultTab() {
     if (slot === 'real') { vault = realVault; masterKey = realMasterKey; }
     else { vault = decoyVault; masterKey = decoyMasterKey; }
     view = 'list'; selectedId = null; listQuery = '';
-    vaultBridge.publish(vault.entries);
+    vaultBridge.publish(visibleEntries(vault));
     render();
   }
 
@@ -195,7 +195,7 @@ function initVaultTab() {
       identityHintOn = false;
       dirty = true;
       state = 'UNLOCKED';
-      vaultBridge.publish(vault.entries);
+      vaultBridge.publish(visibleEntries(vault));
       unlockedSlot = 'real';
       activeSlot = 'real';
       render();
@@ -281,7 +281,7 @@ function initVaultTab() {
         identityHintOn = typeof loadedEnvelope.identityHint === 'string';
         dirty = false;
         state = 'UNLOCKED';
-        vaultBridge.publish(vault.entries);
+        vaultBridge.publish(visibleEntries(vault));
         render();
       } catch (e) {
         btn.disabled = false; btn.textContent = 'Unlock';
@@ -297,7 +297,7 @@ function initVaultTab() {
   }
   function markDirty() {
     dirty = true;
-    if (state === 'UNLOCKED') vaultBridge.publish(vault.entries);
+    if (state === 'UNLOCKED') vaultBridge.publish(visibleEntries(vault));
     if (state === 'UNLOCKED' && view === 'list') renderList();
   }
 
@@ -395,7 +395,7 @@ function initVaultTab() {
     // beforeunload guard in place (spec section 6).
     loadedEnvelope = parseEnvelope(text);
     dirty = false;
-    vaultBridge.publish(vault.entries);
+    vaultBridge.publish(visibleEntries(vault));
     if (!sessionMoveNoteShown) {
       sessionMoveNoteShown = true;
       alert('Saved as kunji-data.json in your downloads. Move it to wherever your sync watches, and overwrite the previous copy.');
@@ -419,7 +419,7 @@ function initVaultTab() {
   // Shared row markup so the full render and the search re-filter never drift.
   function rowsHtml() {
     const q = (listQuery || '').toLowerCase();
-    const html = vault.entries
+    const html = visibleEntries(vault)
       .filter((e) => !q || `${e.name} ${e.site} ${e.account}`.toLowerCase().includes(q))
       .map((e) => {
         const meta = e.type === 'sso'
@@ -440,7 +440,7 @@ function initVaultTab() {
   function renderList() {
     panel.innerHTML = `
       <div class="v-bar">
-        <span class="v-count">Vault &middot; ${vault.entries.length}</span>
+        <span class="v-count">Vault &middot; ${visibleEntries(vault).length}</span>
         <button class="link-btn" id="vNew" type="button">+ New</button>
       </div>
       <input class="v-search" id="vSearch" type="text" placeholder="Search…" value="${esc(listQuery || '')}">
@@ -502,12 +502,12 @@ function initVaultTab() {
 
   async function renderDetail() {
     const e = selectedEntry();
-    if (!e) { view = 'list'; return renderList(); }
+    if (!e || e.deleted) { view = 'list'; return renderList(); }
 
     if (e.type === 'sso') {
       const viaSite = (e.via && e.via.site) || '';
       const viaAccount = (e.via && e.via.account) || '';
-      const linked = vault.entries.some((x) => x.id !== e.id
+      const linked = visibleEntries(vault).some((x) => x.id !== e.id
         && x.site.toLowerCase() === viaSite.toLowerCase()
         && x.account.toLowerCase() === viaAccount.toLowerCase());
       const linkNote = viaSite
@@ -702,7 +702,7 @@ function initVaultTab() {
         };
       }
 
-      const dup = vault.entries.find((x) => x.id !== (existing && existing.id)
+      const dup = visibleEntries(vault).find((x) => x.id !== (existing && existing.id)
         && x.site.toLowerCase() === site.toLowerCase()
         && x.account.toLowerCase() === account.toLowerCase());
       if (dup && !confirm('An entry for this site and account already exists. Save anyway?')) return;
