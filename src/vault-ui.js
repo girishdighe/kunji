@@ -375,7 +375,9 @@ function initVaultTab() {
   }
 
   async function saveVault() {
-    const prevRevision = loadedEnvelope ? (Number(loadedEnvelope.revision) || 0) : 0;
+    const prevRevision = mergedFromRevision != null
+      ? mergedFromRevision
+      : (loadedEnvelope ? (Number(loadedEnvelope.revision) || 0) : 0);
 
     // make sure the active slot's edits are reflected in its stash
     if (activeSlot === 'real') { realVault = vault; realMasterKey = masterKey; }
@@ -431,6 +433,7 @@ function initVaultTab() {
     // beforeunload guard in place (spec section 6).
     loadedEnvelope = parseEnvelope(text);
     dirty = false;
+    mergedFromRevision = null;
     vaultBridge.publish(visibleEntries(vault));
     if (!sessionMoveNoteShown) {
       sessionMoveNoteShown = true;

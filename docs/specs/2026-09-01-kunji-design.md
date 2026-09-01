@@ -276,6 +276,11 @@ this device", and even then only as `identityHint` for prefill convenience.
 }
 ```
 
+An entry object is either a full entry or a tombstone
+`{ id, deleted: true, updatedAt }`. Tombstones are kept permanently (they are how
+a delete survives a later merge with a device that still has the entry) and are
+filtered from every view by `visibleEntries`.
+
 ### 5.3 Multiple accounts on one site
 
 An entry is identified by `site + account`. Three Google identities are three
@@ -359,11 +364,14 @@ Syncthing (recommended, no cloud), a private git repo separate from the public
 one, an existing consumer file-sync (encrypted blob, user's call), or manual
 QR/file transfer.
 
-**Conflict handling.** The blob carries `revision`, `lastWriter`, and per-entry
-`updatedAt`. On load, if Kunji sees a sync-conflict sibling file or an import
-with divergent history, it merges per entry: additions kept, deletions
-tombstoned, field-level last-writer-wins, and shows a one-screen summary. Edits
-are small and infrequent, so conflicts are rare.
+**Conflict handling** is import-driven: Kunji compares a file the user opens (or
+scans) against the loaded vault with `classifyIncoming` and offers merge /
+replace / use-it. The merge is entry-level last-writer-wins by `updatedAt`, ties
+broken by `lastWriter`: additions kept, deletions tombstoned, and a one-screen
+summary (added / updated / deleted-by-them / deleted-here / unchanged) is shown
+before anything is applied. After Apply, the next save's `revision` is
+`max(localRevision, incomingRevision) + 1`. Edits are small and infrequent, so
+conflicts are rare.
 
 ### 7.4 Integrity
 
