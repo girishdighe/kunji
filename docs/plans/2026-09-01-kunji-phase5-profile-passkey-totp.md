@@ -82,8 +82,8 @@ test('profileOf returns the profile or throws on an unknown id', () => {
 test('PROFILES.v1.deriveMasterKey matches raw PBKDF2 for a known input', async () => {
   const { pbkdf2Sha512 } = await import('../src/webcrypto.js');
   const { utf8 } = await import('../src/encoding.js');
-  const got = await PROFILES.v1.deriveMasterKey('pw', 'alex@example.com');
-  const want = await pbkdf2Sha512(utf8('pw'), utf8('alex@example.com'), 600000, 32);
+  const got = await PROFILES.v1.deriveMasterKey('pw', 'me@x.com');
+  const want = await pbkdf2Sha512(utf8('pw'), utf8('me@x.com'), 600000, 32);
   assert.deepEqual(got, want);
 });
 ```
@@ -158,12 +158,12 @@ EOF
 
 ```js
 test('deriveMasterKey(pw,id) == deriveMasterKey(pw,id,"v1") and normalises identity', async () => {
-  const a = await deriveMasterKey('correct horse', 'ALEX@EXAMPLE.com ');
-  const b = await deriveMasterKey('correct horse', 'ALEX@EXAMPLE.com ', 'v1');
+  const a = await deriveMasterKey('correct horse', 'ME@X.com ');
+  const b = await deriveMasterKey('correct horse', 'ME@X.com ', 'v1');
   assert.deepEqual(a, b);
   const { pbkdf2Sha512 } = await import('../src/webcrypto.js');
   const { utf8 } = await import('../src/encoding.js');
-  const want = await pbkdf2Sha512(utf8('correct horse'), utf8('alex@example.com'), 600000, 32);
+  const want = await pbkdf2Sha512(utf8('correct horse'), utf8('me@x.com'), 600000, 32);
   assert.deepEqual(a, want);
 });
 
@@ -201,13 +201,13 @@ export async function deriveMasterKey(passphrase, identity, profile = DEFAULT_PR
 
 `tests/derive.test.mjs` line ~217 — currently:
 ```js
-  const mk = await deriveMasterKey('correct horse battery staple', '  ALEX@example.com ', 1000);
+  const mk = await deriveMasterKey('correct horse battery staple', '  ME@x.com ', 1000);
 ```
 This test measures behaviour at low cost. Replace with a direct PBKDF2 call:
 ```js
   const { pbkdf2Sha512 } = await import('../src/webcrypto.js');
   const { utf8 } = await import('../src/encoding.js');
-  const mk = await pbkdf2Sha512(utf8('correct horse battery staple'), utf8(normaliseInput('  ALEX@example.com ')), 1000, 32);
+  const mk = await pbkdf2Sha512(utf8('correct horse battery staple'), utf8(normaliseInput('  ME@x.com ')), 1000, 32);
 ```
 (add `normaliseInput` to the existing `../src/derive.js` import in that file if not already there — it is exported).
 
