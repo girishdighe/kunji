@@ -341,7 +341,14 @@ Contains no user data.
 - **Single file.** Download `kunji.html` from a tagged Release, open locally, Add
   to Home Screen. Updates are a manual re-download when the user chooses.
 - **Self-hosted PWA.** Fork the repo, deploy your own GitHub Pages instance,
-  install from your own URL.
+  install from your own URL. `node tools/build.mjs` writes `dist/pwa/`
+  (`index.html` + `sw.js` + `manifest.webmanifest` + icons) alongside the single
+  file; the service worker is cache-first over an 8-asset shell keyed by
+  `sha256(index.html)`, and the PWA CSP adds only `worker-src 'self'` — still no
+  `connect-src`, so the page makes no network requests once installed.
+- **Update model.** A new deploy shows a "New version available — Reload" bar in
+  the running app. Nothing changes until the user clicks; then the new shell
+  activates and the page reloads once.
 - **Official Pages deploy.** Provided for convenience, optional.
 
 ### 7.3 Vault sync between a user's own devices

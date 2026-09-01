@@ -20,6 +20,10 @@ Produces `dist/kunji.html`, a single self-contained file. Open it directly in an
 modern browser (Chrome, Safari, Firefox, Edge) on any OS, or add it to your home
 screen. It makes no network requests.
 
+`node tools/build.mjs` also writes `dist/pwa/` — an installable copy (service
+worker + manifest + icons) whose CSP still blocks all network from the page.
+`node tools/build.mjs --no-pwa` writes only the single file.
+
 ## Test
 
     npm test          # unit tests
