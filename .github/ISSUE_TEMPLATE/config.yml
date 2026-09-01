@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/girishdighe/kunji/security/advisories/new
+    about: Report privately. Do not open a public issue for anything exploitable — see SECURITY.md.
+  - name: Question / usage help
+    url: https://github.com/girishdighe/kunji/blob/main/docs/USAGE.md
+    about: Most "how do I…" answers are in the user guide. Still stuck? Open a bug report.
