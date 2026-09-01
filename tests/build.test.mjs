@@ -56,3 +56,10 @@ test('built html inlines the qr modules after encoding.js and before vault.js', 
     assert.ok(html.indexOf(m) < html.indexOf('src/vault.js'), `${m} before vault.js`);
   }
 });
+
+test('built html inlines src/passkey-store.js before vault.js', () => {
+  execFileSync('node', ['tools/build.mjs'], { stdio: 'pipe' });
+  const html = readFileSync('dist/kunji.html', 'utf8');
+  assert.ok(html.includes('==== src/passkey-store.js ===='));
+  assert.ok(html.indexOf('src/passkey-store.js') < html.indexOf('src/vault.js'));
+});
