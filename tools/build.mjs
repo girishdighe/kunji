@@ -1,4 +1,6 @@
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, cpSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 
 // Explicit dependency order.
 // encoding -> webcrypto -> derive -> vault -> vault-bridge -> app -> vault-ui.
@@ -31,3 +33,34 @@ const html = head.replace('/*STYLE*/', () => css) + '\n' + tail.replace('/*SCRIP
 mkdirSync('dist', { recursive: true });
 writeFileSync('dist/kunji.html', html);
 console.log(`dist/kunji.html written (${html.length} bytes)`);
+
+function buildPwa(shellHtml) {
+  const headExtra = readFileSync('tools/pwa/head-extra.html', 'utf8').trim();
+  const register = readFileSync('tools/pwa/register.html', 'utf8').trim();
+
+  let idx = shellHtml.replace(
+    /(<meta http-equiv="Content-Security-Policy" content="[^"]*?)(">)/,
+    (_m, a, b) => `${a}; worker-src 'self'${b}`,
+  );
+  idx = idx.replace('</head>', `${headExtra}\n</head>`);
+  idx = idx.replace('</body>', `</body>\n${register}`);
+
+  mkdirSync('dist/pwa', { recursive: true });
+  writeFileSync('dist/pwa/index.html', idx);
+
+  const shellVersion = createHash('sha256').update(readFileSync('dist/pwa/index.html')).digest('hex');
+  const assets = ['./', './index.html', './sw.js', './manifest.webmanifest',
+    './icon-192.png', './icon-512.png', './icon-512-maskable.png', './apple-touch-icon.png'];
+  const sw = readFileSync('tools/pwa/sw.js', 'utf8')
+    .replace('__SHELL_VERSION__', shellVersion)
+    .replace('__SHELL_ASSETS__', JSON.stringify(assets));
+  writeFileSync('dist/pwa/sw.js', sw);
+
+  cpSync('tools/pwa/manifest.webmanifest', 'dist/pwa/manifest.webmanifest');
+  execFileSync('node', ['tools/gen-icons.mjs', 'dist/pwa'], { stdio: 'pipe' });
+  console.log('dist/pwa/ written');
+}
+
+if (!process.argv.includes('--no-pwa')) {
+  buildPwa(html);
+}
