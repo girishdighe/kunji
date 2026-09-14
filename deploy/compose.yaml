@@ -10,7 +10,14 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:8080:8080"
+    networks:
+      - default
+      - monitoring
     security_opt:
       - no-new-privileges:true
     mem_limit: 64m
     cpus: 0.50
+
+networks:
+  monitoring:
+    external: true
