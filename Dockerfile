@@ -4,7 +4,7 @@ WORKDIR /src
 COPY . .
 RUN npm run verify
 
-FROM nginx:alpine
+FROM nginxinc/nginx-unprivileged:1.30.4-alpine3.24
 
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /src/dist/pwa/ /usr/share/nginx/html/
