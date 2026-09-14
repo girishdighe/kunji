@@ -1,0 +1,18 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Deterministic master-key values in public test vectors"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^tests/vectors/v1\.json$''']
+regexes = ['''"masterKeyHex": "[0-9a-f]{64}"''']
+
+[[allowlists]]
+description = "Master-key derivation pseudocode in architecture documentation"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^docs/ARCHITECTURE\.md$''']
+regexes = ['''deriveMasterKey: PBKDF2-SHA512''']
