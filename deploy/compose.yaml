@@ -1,0 +1,16 @@
+name: kunji
+
+services:
+  kunji:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: kunji:local
+    container_name: kunji
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 64m
+    cpus: 0.50
