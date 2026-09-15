@@ -1,0 +1,23 @@
+name: verify
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: kunji-ci
+    steps:
+      - name: Check out repository
+        uses: https://data.forgejo.org/actions/checkout@v6
+
+      - name: Show Node.js version
+        run: node --version
+
+      - name: Run full verification suite
+        run: npm run verify
