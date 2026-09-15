@@ -30,13 +30,14 @@ jobs:
     steps:
       - name: Deploy tested commit to Fluidprism
         env:
-          KUNJI_DEPLOY_PRIVATE_KEY: ${{ secrets.KUNJI_DEPLOY_PRIVATE_KEY }}
+          KUNJI_DEPLOY_PRIVATE_KEY_B64: ${{ secrets.KUNJI_DEPLOY_PRIVATE_KEY_B64 }}
           KUNJI_DEPLOY_KNOWN_HOSTS: ${{ secrets.KUNJI_DEPLOY_KNOWN_HOSTS }}
         run: |
           set -Eeuo pipefail
           umask 077
           mkdir -p "$HOME/.ssh"
-          printf '%s\n' "$KUNJI_DEPLOY_PRIVATE_KEY" > "$HOME/.ssh/kunji-deploy"
+          printf '%s' "$KUNJI_DEPLOY_PRIVATE_KEY_B64" \
+            | base64 --decode > "$HOME/.ssh/kunji-deploy"
           printf '%s\n' "$KUNJI_DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           ssh \
             -i "$HOME/.ssh/kunji-deploy" \
